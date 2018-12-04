@@ -1021,6 +1021,25 @@ void nvgResetScissor(NVGcontext* ctx)
 	state->scissor.extent[1] = -1.0f;
 }
 
+
+// some value additions
+// these functions must be get/set together with the normal transform
+//
+void nvgGetScissor(NVGcontext* ctx, NVGscissor *scissor)
+{
+	NVGstate* state = nvg__getState(ctx);
+
+	memcpy( scissor, &state->scissor, sizeof(NVGscissor));
+}
+
+
+void nvgSetScissor(NVGcontext* ctx, NVGscissor *scissor)
+{
+	NVGstate* state = nvg__getState(ctx);
+   
+	memcpy( &state->scissor, scissor, sizeof(NVGscissor));
+}
+
 // Global composite operation.
 void nvgGlobalCompositeOperation(NVGcontext* ctx, int op)
 {

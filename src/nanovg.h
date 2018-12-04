@@ -626,6 +626,9 @@ struct NVGscissor {
 };
 typedef struct NVGscissor NVGscissor;
 
+void nvgGetScissor(NVGcontext* ctx, NVGscissor *scissor);
+void nvgSetScissor(NVGcontext* ctx, NVGscissor *scissor);
+
 struct NVGvertex {
 	float x,y,u,v;
 };
