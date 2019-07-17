@@ -19,6 +19,11 @@
 #ifndef FONS_H
 #define FONS_H
 
+#ifdef NANOVG_CLEARTYPE
+# include <stdint.h>
+# include <assert.h>
+#endif
+
 #define FONS_INVALID -1
 
 enum FONSflags {
@@ -152,6 +157,14 @@ void fonsDrawDebug(FONScontext* s, float x, float y);
 #include FT_ADVANCES_H
 #include <math.h>
 
+#ifdef NANOVG_CLEARTYPE
+# ifndef FT_CONFIG_OPTION_SUBPIXEL_RENDERING
+#  error You must use FreeType build with FT_CONFIG_OPTION_SUBPIXEL_RENDERING
+# endif
+# include FT_LCD_FILTER_H
+#endif
+
+
 struct FONSttFontImpl {
 	FT_Face font;
 };
@@ -164,6 +177,10 @@ int fons__tt_init(FONScontext *context)
 	FT_Error ftError;
 	FONS_NOTUSED(context);
 	ftError = FT_Init_FreeType(&ftLibrary);
+#ifdef NANOVG_CLEARTYPE
+   if( ftError == 0 )
+      ftError = FT_Library_SetLcdFilter( ftLibrary, FT_LCD_FILTER_DEFAULT );
+#endif
 	return ftError == 0;
 }
 
@@ -212,7 +229,11 @@ int fons__tt_buildGlyphBitmap(FONSttFontImpl *font, int glyph, float size, float
 
 	ftError = FT_Set_Pixel_Sizes(font->font, 0, (FT_UInt)(size * (float)font->font->units_per_EM / (float)(font->font->ascender - font->font->descender)));
 	if (ftError) return 0;
-	ftError = FT_Load_Glyph(font->font, glyph, FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT);
+#ifdef NANOVG_CLEARTYPE
+	ftError = FT_Load_Glyph(font->font, glyph, FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_LCD);
+#else
+   ftError = FT_Load_Glyph(font->font, glyph, FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT);
+#endif
 	if (ftError) return 0;
 	ftError = FT_Get_Advance(font->font, glyph, FT_LOAD_NO_SCALE, &advFixed);
 	if (ftError) return 0;
@@ -220,11 +241,57 @@ int fons__tt_buildGlyphBitmap(FONSttFontImpl *font, int glyph, float size, float
 	*advance = (int)advFixed;
 	*lsb = (int)ftGlyph->metrics.horiBearingX;
 	*x0 = ftGlyph->bitmap_left;
-	*x1 = *x0 + ftGlyph->bitmap.width;
+#ifdef NANOVG_CLEARTYPE
+   assert( 0 == ( ftGlyph->bitmap.width % 3 ) );
+   *x1 = *x0 + ftGlyph->bitmap.width / 3; // correct for three subpixels
+#else
+   *x1 = *x0 + ftGlyph->bitmap.width;
+#endif
 	*y0 = -ftGlyph->bitmap_top;
 	*y1 = *y0 + ftGlyph->bitmap.rows;
 	return 1;
 }
+
+#ifdef NANOVG_CLEARTYPE
+
+// Pack 3 grayscale sub-pixel bytes into a single RGBA pixel.
+static inline uint32_t packCleartypeSubpixels( uint8_t* triple )
+{
+   uint32_t res = triple[ 0 ];
+   res |= ( ( (uint32_t)triple[ 1 ] ) << 8 );
+   res |= ( ( (uint32_t)triple[ 2 ] ) << 16 );
+   // On PC GPUs, it's much faster to do in pixel shader. On slow embedded ARM this is probably not the case.
+   // Ideally we might want max, not bitwise OR, but OR is much faster to compute in scalar code, too bad scalar parts of CPUs don't have instructions like pmaxub (PC) / umax (ARM).
+   // This code only runs while building textures, i.e. much less frequent than each frame.
+   uint32_t all = triple[ 0 ] | triple[ 1 ] | triple[ 2 ];
+   res |= ( all << 24 );
+   return res;
+}
+
+void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
+                        float scaleX, float scaleY, int glyph)
+{
+   FT_GlyphSlot ftGlyph = font->font->glyph;
+   int rgbWidth = ftGlyph->bitmap.width / 3;
+   uint8_t* sourceLine = ftGlyph->bitmap.buffer;
+   size_t sourceStride = ftGlyph->bitmap.pitch;
+
+   for( uint32_t y = 0; y < ftGlyph->bitmap.rows; y++ )
+   {
+      uint8_t* src = sourceLine;
+      uint32_t *dest = (uint32_t *) output;
+      for( int x = 0; x < rgbWidth; x++ )
+      {
+         *dest = packCleartypeSubpixels( src );
+         src += 3;
+         dest++;
+      }
+      sourceLine += sourceStride;
+      output += outStride;  // adjust for rgba
+   }
+}
+
+#else
 
 void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
 								float scaleX, float scaleY, int glyph)
@@ -244,6 +311,8 @@ void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int
 		}
 	}
 }
+
+#endif
 
 int fons__tt_getGlyphKernAdvance(FONSttFontImpl *font, int glyph1, int glyph2)
 {

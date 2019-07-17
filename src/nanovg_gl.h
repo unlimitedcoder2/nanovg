@@ -124,7 +124,8 @@ enum GLNVGshaderType {
 	NSVG_SHADER_FILLGRAD,
 	NSVG_SHADER_FILLIMG,
 	NSVG_SHADER_SIMPLE,
-	NSVG_SHADER_IMG
+	NSVG_SHADER_IMG,
+   NSVG_SHADER_CLEARTYPE,  // Only used when NANOVG_CLEARTYPE is defined
 };
 
 #if NANOVG_GL_USE_UNIFORMBUFFER
@@ -520,6 +521,9 @@ static int glnvg__renderCreate(void* uptr)
 		"#version 300 es\n"
 		"#define NANOVG_GL3 1\n"
 #endif
+#ifdef NANOVG_CLEARTYPE
+      "#define NANOVG_CLEARTYPE 1\n"
+#endif
 
 #if NANOVG_GL_USE_UNIFORMBUFFER
 	"#define USE_UNIFORMBUFFER 1\n"
@@ -666,6 +670,29 @@ static int glnvg__renderCreate(void* uptr)
 		"		color *= scissor;\n"
 		"		result = color * innerCol;\n"
 		"	}\n"
+      "#ifdef NANOVG_CLEARTYPE\n"
+      "   else if ( type == 4 )      // GLNVGshaderType::NSVG_SHADER_CLEARTYPE\n"
+      "   {\n"
+      "#ifdef NANOVG_GL3\n"
+      "      vec4 color = texture(tex, ftcoord);\n"
+      "#else\n"
+      "      vec4 color = texture2D(tex, ftcoord);\n"
+      "#endif\n"
+      "      float deriv = dFdx( ftcoord.x );\n"
+      "      if( deriv < 0.0 )\n"
+      "         color.xz = color.zx; // The text is horizontally mirrored, or rotated 180 degrees. Flip red and blue subpixels of the texture.\n"
+      "      else if ( deriv == 0.0 )   // The text is rotated 90 degrees. Average all 3 subpixels, disabling ClearType\n"
+      "         color = vec4( ( color.x + color.y + color.z ) * ( 1.0 / 3.0 ) );\n"
+      "\n"
+      "      if( color.w * scissor * innerCol.w < ( 1.0 / 256.0 ) )\n"
+      "         discard;\n"
+      "\n"
+      "      // Do the clear type thing\n"
+      "      result.xyz = color.xyz * innerCol.xyz + ( vec3( innerCol.w ) - color.xyz ) * outerCol.xyz;\n"
+      "      result.w = innerCol.w;\n"
+      "      result *= scissor;\n"
+      "   }\n"
+      "#endif\n"
 		"#ifdef NANOVG_GL3\n"
 		"	outColor = result;\n"
 		"#else\n"
@@ -1505,8 +1532,11 @@ static void glnvg__renderTriangles(void* uptr, NVGpaint* paint, NVGcompositeOper
 	if (call->uniformOffset == -1) goto error;
 	frag = nvg__fragUniformPtr(gl, call->uniformOffset);
 	glnvg__convertPaint(gl, frag, paint, scissor, 1.0f, 1.0f, -1.0f);
-	frag->type = NSVG_SHADER_IMG;
-
+#ifdef NANOVG_CLEARTYPE
+   frag->type = (float)( ( paint->drawingFont ) ? NSVG_SHADER_CLEARTYPE : NSVG_SHADER_IMG );
+#else
+   frag->type = (float)NSVG_SHADER_IMG;
+#endif
 	return;
 
 error:

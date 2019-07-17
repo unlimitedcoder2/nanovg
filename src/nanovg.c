@@ -48,6 +48,12 @@
 
 #define NVG_COUNTOF(arr) (sizeof(arr) / sizeof(0[arr]))
 
+#ifdef NANOVG_CLEARTYPE
+#define NVG_FONT_TEXTURE   NVG_TEXTURE_RGBA
+#else
+#define NVG_FONT_TEXTURE   NVG_TEXTURE_ALPHA
+#endif
+
 
 enum NVGcommands {
 	NVG_MOVETO = 0,
@@ -325,7 +331,7 @@ NVGcontext* nvgCreateInternal(NVGparams* params)
 	if (ctx->fs == NULL) goto error;
 
 	// Create font texture
-	ctx->fontImages[0] = ctx->params.renderCreateTexture(ctx->params.userPtr, NVG_TEXTURE_ALPHA, fontParams.width, fontParams.height, 0, NULL);
+	ctx->fontImages[0] = ctx->params.renderCreateTexture(ctx->params.userPtr, NVG_FONT_TEXTURE, fontParams.width, fontParams.height, 0, NULL);
 	if (ctx->fontImages[0] == 0) goto error;
 	ctx->fontImageIdx = 0;
 
@@ -789,6 +795,15 @@ void nvgFillColor(NVGcontext* ctx, NVGcolor color)
 	nvg__setPaintColor(&state->fill, color);
 }
 
+void nvgTextColor( NVGcontext* ctx, NVGcolor foreground, NVGcolor background )
+{
+   NVGstate* state = nvg__getState( ctx );
+   nvg__setPaintColor( &state->fill, foreground );
+#ifdef NANOVG_CLEARTYPE
+   state->fill.outerColor = background;
+#endif
+}
+
 void nvgFillPaint(NVGcontext* ctx, NVGpaint paint)
 {
 	NVGstate* state = nvg__getState(ctx);
@@ -1044,7 +1059,7 @@ void nvgGetScissor(NVGcontext* ctx, NVGscissor *scissor)
 void nvgSetScissor(NVGcontext* ctx, NVGscissor *scissor)
 {
 	NVGstate* state = nvg__getState(ctx);
-   
+
 	memcpy( &state->scissor, scissor, sizeof(NVGscissor));
 }
 
@@ -1350,7 +1365,7 @@ static void nvg__tesselateBezier(NVGcontext* ctx,
 void nvg__tesselateBezierAFD(NVGcontext* ctx, float x1, float y1, float x2, float y2,
                                float x3, float y3, float x4, float y4, int type)
 {
-  
+
 	// Power basis.
 	float ax = -x1 + 3*x2 - 3*x3 + x4;
 	float ay = -y1 + 3*y2 - 3*y3 + y4;
@@ -1358,7 +1373,7 @@ void nvg__tesselateBezierAFD(NVGcontext* ctx, float x1, float y1, float x2, floa
 	float by = 3*y1 - 6*y2 + 3*y3;
 	float cx = -3*x1 + 3*x2;
 	float cy = -3*y1 + 3*y2;
-	
+
 	// Transform to forward difference basis (stepsize 1)
 	float px = x1;
 	float py = y1;
@@ -1368,31 +1383,31 @@ void nvg__tesselateBezierAFD(NVGcontext* ctx, float x1, float y1, float x2, floa
 	float ddy = 6*ay + 2*by;
 	float dddx = 6*ax;
 	float dddy = 6*ay;
-	
+
 	//printf("dx: %f, dy: %f\n", dx, dy);
 	//printf("ddx: %f, ddy: %f\n", ddx, ddy);
 	//printf("dddx: %f, dddy: %f\n", dddx, dddy);
-	
+
 	#define AFD_ONE (1<<10)
-	
+
 	int t = 0;
 	int dt = AFD_ONE;
-	
+
 	float tol = ctx->tessTol * 4.0;
-	
+
 	while(t < AFD_ONE) {
-		
+
 		// Flatness measure.
 		float d = ddx*ddx + ddy*ddy + dddx*dddx + dddy*dddy;
-		
+
 		// printf("d: %f, th: %f\n", d, th);
-		
+
 		// Go to higher resolution if we're moving a lot
 		// or overshooting the end.
 		while( (d > tol && dt > 1) || (t+dt > AFD_ONE) ) {
-			
+
 			// printf("up\n");
-			
+
 			// Apply L to the curve. Increase curve resolution.
 			dx = .5 * dx - (1.0/8.0)*ddx + (1.0/16.0)*dddx;
 			dy = .5 * dy - (1.0/8.0)*ddy + (1.0/16.0)*dddy;
@@ -1400,22 +1415,22 @@ void nvg__tesselateBezierAFD(NVGcontext* ctx, float x1, float y1, float x2, floa
 			ddy = (1.0/4.0) * ddy - (1.0/8.0) * dddy;
 			dddx = (1.0/8.0) * dddx;
 			dddy = (1.0/8.0) * dddy;
-			
+
 			// Half the stepsize.
 			dt >>= 1;
-			
+
 			// Recompute d
 			d = ddx*ddx + ddy*ddy + dddx*dddx + dddy*dddy;
-			
+
 		}
-		
+
 		// Go to lower resolution if we're really flat
 		// and we aren't going to overshoot the end.
 		// XXX: tol/32 is just a guess for when we are too flat.
 		while ( (d > 0 && d < tol/32.0f && dt < AFD_ONE) && (t+2*dt <= AFD_ONE) ) {
-			
+
 			// printf("down\n");
-			
+
 			// Apply L^(-1) to the curve. Decrease curve resolution.
 			dx = 2 * dx + ddx;
 			dy = 2 * dy + ddy;
@@ -1423,15 +1438,15 @@ void nvg__tesselateBezierAFD(NVGcontext* ctx, float x1, float y1, float x2, floa
 			ddy = 4 * ddy + 4 * dddy;
 			dddx = 8 * dddx;
 			dddy = 8 * dddy;
-			
+
 			// Double the stepsize.
 			dt <<= 1;
-			
+
 			// Recompute d
 			d = ddx*ddx + ddy*ddy + dddx*dddx + dddy*dddy;
-			
+
 		}
-		
+
 		// Forward differencing.
 		px += dx;
 		py += dy;
@@ -1439,18 +1454,18 @@ void nvg__tesselateBezierAFD(NVGcontext* ctx, float x1, float y1, float x2, floa
 		dy += ddy;
 		ddx += dddx;
 		ddy += dddy;
-		
+
 		// Output a point.
 		nvg__addPoint(ctx, px, py, t > 0 ? type : 0);
-		
+
 		// Advance along the curve.
 		t += dt;
-		
+
 		// Ensure we don't overshoot.
 		assert(t <= AFD_ONE);
-		
+
 	}
-  
+
 }
 
 static void nvg__flattenPaths(NVGcontext* ctx)
@@ -2463,8 +2478,11 @@ void nvgFontSize(NVGcontext* ctx, float size)
 
 void nvgFontBlur(NVGcontext* ctx, float blur)
 {
+#ifndef NANOVG_CLEARTYPE
 	NVGstate* state = nvg__getState(ctx);
+
 	state->fontBlur = blur;
+#endif
 }
 
 void nvgTextLetterSpacing(NVGcontext* ctx, float spacing)
@@ -2543,7 +2561,7 @@ static int nvg__allocTextAtlas(NVGcontext* ctx)
 			iw *= 2;
 		if (iw > NVG_MAX_FONTIMAGE_SIZE || ih > NVG_MAX_FONTIMAGE_SIZE)
 			iw = ih = NVG_MAX_FONTIMAGE_SIZE;
-		ctx->fontImages[ctx->fontImageIdx+1] = ctx->params.renderCreateTexture(ctx->params.userPtr, NVG_TEXTURE_ALPHA, iw, ih, 0, NULL);
+		ctx->fontImages[ctx->fontImageIdx+1] = ctx->params.renderCreateTexture(ctx->params.userPtr, NVG_FONT_TEXTURE, iw, ih, 0, NULL);
 	}
 	++ctx->fontImageIdx;
 	fonsResetAtlas(ctx->fs, iw, ih);
@@ -2562,6 +2580,9 @@ static void nvg__renderText(NVGcontext* ctx, NVGvertex* verts, int nverts)
 	paint.innerColor.a *= state->alpha;
 	paint.outerColor.a *= state->alpha;
 
+#ifdef NANOVG_CLEARTYPE
+   paint.drawingFont = 1;
+#endif
 	ctx->params.renderTriangles(ctx->params.userPtr, &paint, state->compositeOperation, &state->scissor, verts, nverts);
 
 	ctx->drawCallCount++;

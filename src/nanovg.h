@@ -50,6 +50,9 @@ struct NVGpaint {
 	NVGcolor innerColor;
 	NVGcolor outerColor;
 	int image;
+#ifdef NANOVG_CLEARTYPE
+   int drawingFont;
+#endif
 };
 typedef struct NVGpaint NVGpaint;
 
@@ -254,6 +257,9 @@ void nvgStrokePaint(NVGcontext* ctx, NVGpaint paint);
 
 // Sets current fill style to a solid color.
 void nvgFillColor(NVGcontext* ctx, NVGcolor color);
+
+// use this to support cleartype for font drawing instead of fill
+void nvgTextColor( NVGcontext* ctx, NVGcolor foreground, NVGcolor background );
 
 // Sets current fill style to a paint, which can be a one of the gradients or a pattern.
 void nvgFillPaint(NVGcontext* ctx, NVGpaint paint);
