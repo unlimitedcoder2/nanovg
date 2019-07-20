@@ -61,6 +61,8 @@ enum FONSerrorCode {
 
 struct FONSparams {
 	int width, height;
+   int pixelsize;    // 1: standard   4: RGBA
+   int bytewidth;    // premultiplied width with pixelsize
 	unsigned char flags;
 	void* userPtr;
 	int (*renderCreate)(void* uptr, int width, int height);
@@ -104,7 +106,7 @@ void fonsGetAtlasSize(FONScontext* s, int* width, int* height);
 // Expands the atlas size.
 int fonsExpandAtlas(FONScontext* s, int width, int height);
 // Resets the whole stash.
-int fonsResetAtlas(FONScontext* stash, int width, int height);
+int fonsResetAtlas(FONScontext* stash, int width, int height, int pixelsize);
 
 // Add fonts
 int fonsAddFont(FONScontext* s, const char* name, const char* path);
@@ -287,7 +289,7 @@ void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int
          dest++;
       }
       sourceLine += sourceStride;
-      output += outStride;  // adjust for rgba
+      output += outStride;
    }
 }
 
@@ -775,11 +777,11 @@ static void fons__addWhiteRect(FONScontext* stash, int w, int h)
 		return;
 
 	// Rasterize
-	dst = &stash->texData[gx + gy * stash->params.width];
+	dst = &stash->texData[(gx + gy) * stash->params.pixelsize];
 	for (y = 0; y < h; y++) {
 		for (x = 0; x < w; x++)
-			dst[x] = 0xff;
-		dst += stash->params.width;
+			memset( &dst[x * stash->params.pixelsize], 0xff, stash->params.pixelsize);
+		dst += stash->params.bytewidth;
 	}
 
 	stash->dirtyRect[0] = fons__mini(stash->dirtyRect[0], gx);
@@ -824,9 +826,9 @@ FONScontext* fonsCreateInternal(FONSparams* params)
 	// Create texture for the cache.
 	stash->itw = 1.0f/stash->params.width;
 	stash->ith = 1.0f/stash->params.height;
-	stash->texData = (unsigned char*)malloc(stash->params.width * stash->params.height);
+	stash->texData = (unsigned char*)malloc(stash->params.bytewidth * stash->params.height);
 	if (stash->texData == NULL) goto error;
-	memset(stash->texData, 0, stash->params.width * stash->params.height);
+	memset(stash->texData, 0, stash->params.bytewidth * stash->params.height);
 
 	stash->dirtyRect[0] = stash->params.width;
 	stash->dirtyRect[1] = stash->params.height;
@@ -1216,18 +1218,18 @@ static FONSglyph* fons__getGlyph(FONScontext* stash, FONSfont* font, unsigned in
 	}
 
 	// Rasterize
-	dst = &stash->texData[(glyph->x0+pad) + (glyph->y0+pad) * stash->params.width];
-	fons__tt_renderGlyphBitmap(&renderFont->font, dst, gw-pad*2,gh-pad*2, stash->params.width, scale, scale, g);
+	dst = &stash->texData[((glyph->x0+pad) + (glyph->y0+pad) * stash->params.width) * stash->params.pixelsize];
+	fons__tt_renderGlyphBitmap(&renderFont->font, dst, gw-pad*2,gh-pad*2, stash->params.width * stash->params.pixelsize, scale, scale, g);
 
 	// Make sure there is one pixel empty border.
-	dst = &stash->texData[glyph->x0 + glyph->y0 * stash->params.width];
+	dst = &stash->texData[(glyph->x0 + glyph->y0 * stash->params.width)*stash->params.pixelsize];
 	for (y = 0; y < gh; y++) {
-		dst[y*stash->params.width] = 0;
-		dst[gw-1 + y*stash->params.width] = 0;
+		memset( &dst[y*stash->params.bytewidth], 0, stash->params.pixelsize);
+		memset( &dst[(gw-1 + y*stash->params.width) * stash->params.pixelsize], 0, stash->params.pixelsize);
 	}
 	for (x = 0; x < gw; x++) {
-		dst[x] = 0;
-		dst[x + (gh-1)*stash->params.width] = 0;
+		memset( &dst[x * stash->params.pixelsize], 0, stash->params.pixelsize);
+		memset( &dst[(x + (gh-1)*stash->params.width) * stash->params.pixelsize], 0, stash->params.pixelsize);
 	}
 
 	// Debug code to color the glyph background
@@ -1241,9 +1243,9 @@ static FONSglyph* fons__getGlyph(FONScontext* stash, FONSfont* font, unsigned in
 	}*/
 
 	// Blur
-	if (iblur > 0) {
+	if (iblur > 0 && stash->params.pixelsize == 1) {
 		stash->nscratch = 0;
-		bdst = &stash->texData[glyph->x0 + glyph->y0 * stash->params.width];
+		bdst = &stash->texData[(glyph->x0 + glyph->y0 * stash->params.width)];
 		fons__blur(stash, bdst, gw, gh, stash->params.width, iblur);
 	}
 
@@ -1671,6 +1673,7 @@ void fonsLineBounds(FONScontext* stash, float y, float* miny, float* maxy)
 	}
 }
 
+// TODO: pass pixelsize back ?
 const unsigned char* fonsGetTextureData(FONScontext* stash, int* width, int* height)
 {
 	if (width != NULL)
@@ -1751,18 +1754,18 @@ int fonsExpandAtlas(FONScontext* stash, int width, int height)
 			return 0;
 	}
 	// Copy old texture data over.
-	data = (unsigned char*)malloc(width * height);
+	data = (unsigned char*)malloc(width * height * stash->params.pixelsize);
 	if (data == NULL)
 		return 0;
 	for (i = 0; i < stash->params.height; i++) {
-		unsigned char* dst = &data[i*width];
-		unsigned char* src = &stash->texData[i*stash->params.width];
-		memcpy(dst, src, stash->params.width);
+		unsigned char* dst = &data[(i*width)*stash->params.pixelsize];
+		unsigned char* src = &stash->texData[i*stash->params.bytewidth];
+		memcpy(dst, src, stash->params.bytewidth);
 		if (width > stash->params.width)
-			memset(dst+stash->params.width, 0, width - stash->params.width);
+			memset(dst+stash->params.bytewidth, 0, (width - stash->params.width) * stash->params.pixelsize);
 	}
 	if (height > stash->params.height)
-		memset(&data[stash->params.height * width], 0, (height - stash->params.height) * width);
+		memset(&data[stash->params.height * width * stash->params.pixelsize], 0, (height - stash->params.height) * width * stash->params.pixelsize);
 
 	free(stash->texData);
 	stash->texData = data;
@@ -1786,10 +1789,10 @@ int fonsExpandAtlas(FONScontext* stash, int width, int height)
 	return 1;
 }
 
-int fonsResetAtlas(FONScontext* stash, int width, int height)
+int fonsResetAtlas(FONScontext* stash, int width, int height, int pixelsize)
 {
 	int i, j;
-	if (stash == NULL) return 0;
+	if (stash == NULL || pixelsize == 0) return 0;
 
 	// Flush pending glyphs.
 	fons__flush(stash);
@@ -1804,9 +1807,9 @@ int fonsResetAtlas(FONScontext* stash, int width, int height)
 	fons__atlasReset(stash->atlas, width, height);
 
 	// Clear texture data.
-	stash->texData = (unsigned char*)realloc(stash->texData, width * height);
+	stash->texData = (unsigned char*)realloc(stash->texData, width * height * pixelsize);
 	if (stash->texData == NULL) return 0;
-	memset(stash->texData, 0, width * height);
+	memset(stash->texData, 0, width * height * pixelsize);
 
 	// Reset dirty rect
 	stash->dirtyRect[0] = width;
@@ -1824,6 +1827,8 @@ int fonsResetAtlas(FONScontext* stash, int width, int height)
 
 	stash->params.width = width;
 	stash->params.height = height;
+   stash->params.pixelsize = pixelsize;
+   stash->params.bytewidth  = width * pixelsize;
 	stash->itw = 1.0f/stash->params.width;
 	stash->ith = 1.0f/stash->params.height;
 

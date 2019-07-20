@@ -321,6 +321,13 @@ NVGcontext* nvgCreateInternal(NVGparams* params)
 	memset(&fontParams, 0, sizeof(fontParams));
 	fontParams.width = NVG_INIT_FONTIMAGE_SIZE;
 	fontParams.height = NVG_INIT_FONTIMAGE_SIZE;
+#ifdef NANOVG_CLEARTYPE
+   fontParams.pixelsize = 4;
+#else
+   fontParams.pixelsize = 1;
+#endif
+   fontParams.bytewidth = fontParams.pixelsize * fontParams.height;
+
 	fontParams.flags = FONS_ZERO_TOPLEFT;
 	fontParams.renderCreate = NULL;
 	fontParams.renderUpdate = NULL;
@@ -2564,7 +2571,7 @@ static int nvg__allocTextAtlas(NVGcontext* ctx)
 		ctx->fontImages[ctx->fontImageIdx+1] = ctx->params.renderCreateTexture(ctx->params.userPtr, NVG_FONT_TEXTURE, iw, ih, 0, NULL);
 	}
 	++ctx->fontImageIdx;
-	fonsResetAtlas(ctx->fs, iw, ih);
+	fonsResetAtlas(ctx->fs, iw, ih, NVG_FONT_TEXTURE == NVG_TEXTURE_ALPHA ? 1 : 4);
 	return 1;
 }
 
