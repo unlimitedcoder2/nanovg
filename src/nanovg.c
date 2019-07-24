@@ -2588,6 +2588,8 @@ static void nvg__renderText(NVGcontext* ctx, NVGvertex* verts, int nverts)
 	paint.outerColor.a *= state->alpha;
 
 #ifdef NANOVG_CLEARTYPE
+   // even if we have no proper LCD info, the drawing looks better or same 
+   // with it
    paint.drawingFont = 1;
 #endif
 	ctx->params.renderTriangles(ctx->params.userPtr, &paint, state->compositeOperation, &state->scissor, verts, nverts);

@@ -19,10 +19,11 @@
 #ifndef FONS_H
 #define FONS_H
 
-#ifdef NANOVG_CLEARTYPE
-# include <stdint.h>
-# include <assert.h>
-#endif
+#include <stdint.h>
+#include <assert.h>
+
+#include "bmp-writer.h"
+
 
 #define FONS_INVALID -1
 
@@ -244,17 +245,19 @@ int fons__tt_buildGlyphBitmap(FONSttFontImpl *font, int glyph, float size, float
 	*lsb = (int)ftGlyph->metrics.horiBearingX;
 	*x0 = ftGlyph->bitmap_left;
 #ifdef NANOVG_CLEARTYPE
-   assert( 0 == ( ftGlyph->bitmap.width % 3 ) );
-   *x1 = *x0 + ftGlyph->bitmap.width / 3; // correct for three subpixels
+   // If not too small for LCD format we get subpixel format
+   if( ftGlyph->bitmap.pixel_mode == 5)
+      *x1 = *x0 + ftGlyph->bitmap.width / 3; // correct for three subpixels
+   else
+      *x1 = *x0 + ftGlyph->bitmap.width;
 #else
    *x1 = *x0 + ftGlyph->bitmap.width;
-#endif
+#endif   
 	*y0 = -ftGlyph->bitmap_top;
 	*y1 = *y0 + ftGlyph->bitmap.rows;
 	return 1;
 }
 
-#ifdef NANOVG_CLEARTYPE
 
 // Pack 3 grayscale sub-pixel bytes into a single RGBA pixel.
 static inline uint32_t packCleartypeSubpixels( uint8_t* triple )
@@ -270,13 +273,15 @@ static inline uint32_t packCleartypeSubpixels( uint8_t* triple )
    return res;
 }
 
-void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
+static void fons__tt_renderGlyphRGBABitmapLCD(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
                         float scaleX, float scaleY, int glyph)
 {
    FT_GlyphSlot ftGlyph = font->font->glyph;
    int rgbWidth = ftGlyph->bitmap.width / 3;
    uint8_t* sourceLine = ftGlyph->bitmap.buffer;
    size_t sourceStride = ftGlyph->bitmap.pitch;
+
+   assert( ftGlyph->bitmap.pixel_mode == FT_PIXEL_MODE_LCD);
 
    for( uint32_t y = 0; y < ftGlyph->bitmap.rows; y++ )
    {
@@ -293,9 +298,76 @@ void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int
    }
 }
 
-#else
+// Pack 3 grayscale sub-pixel bytes into a single RGBA pixel.
+static inline uint32_t packRGBAGrayscale( uint8_t color )
+{
+   return( ((uint32_t) color << 24) | 
+           ((uint32_t) color << 16) | 
+           ((uint32_t) color << 8) |
+           0xFF);
+}
 
-void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
+static void fons__tt_renderGlyphRGBABitmapGrayscale(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
+                        float scaleX, float scaleY, int glyph)
+{
+   FT_GlyphSlot ftGlyph = font->font->glyph;
+   int rgbWidth = ftGlyph->bitmap.width;
+   uint8_t* sourceLine = ftGlyph->bitmap.buffer;
+   size_t sourceStride = ftGlyph->bitmap.pitch;
+
+   assert( ftGlyph->bitmap.pixel_mode == FT_PIXEL_MODE_GRAY);
+
+   for( uint32_t y = 0; y < ftGlyph->bitmap.rows; y++ )
+   {
+      uint8_t  *src = sourceLine;
+      uint32_t *dest = (uint32_t *) output;
+      for( int x = 0; x < rgbWidth; x++ )
+      {
+         *dest++ = packRGBAGrayscale( *src++ );
+      }
+      sourceLine += sourceStride;
+      output     += outStride;
+   }
+}
+
+
+static void fons__tt_renderGlyphRGBABitmapMono(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
+                        float scaleX, float scaleY, int glyph)
+{
+   FT_GlyphSlot ftGlyph = font->font->glyph;
+   int rgbWidth = ftGlyph->bitmap.width;
+   uint8_t* sourceLine = ftGlyph->bitmap.buffer;
+   size_t sourceStride = ftGlyph->bitmap.pitch;
+   uint32_t               value;
+   uint32_t               mask;
+   uint32_t               pixel;
+
+   assert( ftGlyph->bitmap.pixel_mode == FT_PIXEL_MODE_MONO);
+
+   for( uint32_t y = 0; y < ftGlyph->bitmap.rows; y++ )
+   {
+      uint8_t  *src = sourceLine;
+      uint32_t *dest = (uint32_t *) output;
+
+      mask = 0x0;
+      for( int x = 0; x < rgbWidth; x++ )
+      {
+         mask >>= 1;
+         if( ! mask)
+         {
+            value = *src++;
+            mask = 0x80;
+         }
+         pixel   = value & mask;
+         *dest++ = packRGBAGrayscale( pixel ? 0xFF : 0x00);
+      }
+      sourceLine += sourceStride;
+      output     += outStride;
+   }
+}
+
+
+static void fons__tt_renderGlyphBitmapGrayscale(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
 								float scaleX, float scaleY, int glyph)
 {
 	FT_GlyphSlot ftGlyph = font->font->glyph;
@@ -307,6 +379,8 @@ void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int
 	FONS_NOTUSED(scaleY);
 	FONS_NOTUSED(glyph);	// glyph has already been loaded by fons__tt_buildGlyphBitmap
 
+   assert( ftGlyph->bitmap.pixel_mode == FT_PIXEL_MODE_GRAY);
+
 	for ( y = 0; y < ftGlyph->bitmap.rows; y++ ) {
 		for ( x = 0; x < ftGlyph->bitmap.width; x++ ) {
 			output[(y * outStride) + x] = ftGlyph->bitmap.buffer[ftGlyphOffset++];
@@ -314,7 +388,83 @@ void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int
 	}
 }
 
-#endif
+
+static void fons__tt_renderGlyphBitmapMono(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
+                        float scaleX, float scaleY, int glyph)
+{
+   FT_GlyphSlot ftGlyph = font->font->glyph;
+   int          rgbWidth = ftGlyph->bitmap.width;
+   uint8_t*     sourceLine = ftGlyph->bitmap.buffer;
+   size_t       sourceStride = ftGlyph->bitmap.pitch;
+   uint32_t     value;
+   uint32_t     mask;
+   uint32_t     pixel;
+
+   assert( ftGlyph->bitmap.pixel_mode == FT_PIXEL_MODE_MONO);
+
+   for( uint32_t y = 0; y < ftGlyph->bitmap.rows; y++ )
+   {
+      uint8_t  *src  = sourceLine;
+      uint8_t  *dest = output;
+
+      mask = 0x0;
+      for( int x = 0; x < rgbWidth; x++ )
+      {
+         mask >>= 1;
+         if( ! mask)
+         {
+            value = *src++;
+            mask = 0x80;
+         }
+         pixel   = value & mask;
+         *dest++ = pixel ? 0xFF : 0x00;
+      }
+      sourceLine += sourceStride;
+      output     += outStride;
+   }
+}
+
+
+void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
+								float scaleX, float scaleY, int glyph)
+{            
+	FT_GlyphSlot ftGlyph = font->font->glyph;
+
+#ifdef NANOVG_CLEARTYPE
+   switch( ftGlyph->bitmap.pixel_mode)
+   {
+      case FT_PIXEL_MODE_MONO :
+         fons__tt_renderGlyphRGBABitmapMono( font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
+         break;      
+
+      case FT_PIXEL_MODE_GRAY:
+         fons__tt_renderGlyphRGBABitmapGrayscale( font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
+         break;
+
+      case FT_PIXEL_MODE_LCD :
+         fons__tt_renderGlyphRGBABitmapLCD( font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
+         break;      
+
+      default:
+         abort();
+   }
+#else
+   switch( ftGlyph->bitmap.pixel_mode)
+   {
+   case FT_PIXEL_MODE_GRAY:
+      fons__tt_renderGlyphBitmapGrayscale( font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
+      break;
+
+   case FT_PIXEL_MODE_MONO :
+      fons__tt_renderGlyphBitmapMono( font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
+      break;      
+
+   default:
+      abort();
+   }
+#endif   
+}
+
 
 int fons__tt_getGlyphKernAdvance(FONSttFontImpl *font, int glyph1, int glyph2)
 {
@@ -1219,7 +1369,7 @@ static FONSglyph* fons__getGlyph(FONScontext* stash, FONSfont* font, unsigned in
 
 	// Rasterize
 	dst = &stash->texData[((glyph->x0+pad) + (glyph->y0+pad) * stash->params.width) * stash->params.pixelsize];
-	fons__tt_renderGlyphBitmap(&renderFont->font, dst, gw-pad*2,gh-pad*2, stash->params.width * stash->params.pixelsize, scale, scale, g);
+	fons__tt_renderGlyphBitmap(&renderFont->font, dst, gw-pad*2,gh-pad*2, stash->params.bytewidth, scale, scale, g);
 
 	// Make sure there is one pixel empty border.
 	dst = &stash->texData[(glyph->x0 + glyph->y0 * stash->params.width)*stash->params.pixelsize];
@@ -1231,6 +1381,19 @@ static FONSglyph* fons__getGlyph(FONScontext* stash, FONSfont* font, unsigned in
 		memset( &dst[x * stash->params.pixelsize], 0, stash->params.pixelsize);
 		memset( &dst[(x + (gh-1)*stash->params.width) * stash->params.pixelsize], 0, stash->params.pixelsize);
 	}
+
+   {
+      char  filename[ 32];
+      void  *image;
+
+      sprintf( filename, "glyph-cp%d-g%dx%d-s%d-b%d.bmp", codepoint, gw, gh, (int) (scale * 2048.0 + 0.5), stash->params.pixelsize);
+      /* fonts are laying there flipped, so draw bottom to top  */
+      image = &stash->texData[ (glyph->x0 + (glyph->y0 + gh - 1) * stash->params.width) * stash->params.pixelsize];
+      if( stash->params.pixelsize == 4)
+         bmp_rgb32_write_file( filename, image, gw, gh, - stash->params.bytewidth);
+      else
+         bmp_grayscale_write_file( filename, image, gw, gh, - stash->params.bytewidth);
+   }
 
 	// Debug code to color the glyph background
 /*	unsigned char* fdst = &stash->texData[glyph->x0 + glyph->y0 * stash->params.width];

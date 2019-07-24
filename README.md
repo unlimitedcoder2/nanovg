@@ -11,6 +11,7 @@ Above standard antialias, below cleartype:
 #### Caveat
 
 The shader uses `dFdx`, which according to this [comment](https://github.com/memononen/nanovg/issues/456#issuecomment-370199655) is not available on GLES2.
+But this example was run with GLES2, so ????
 
 
 NanoVG
