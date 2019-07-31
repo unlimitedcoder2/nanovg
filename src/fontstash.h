@@ -22,8 +22,6 @@
 #include <stdint.h>
 #include <assert.h>
 
-#include "bmp-writer.h"
-
 
 #define FONS_INVALID -1
 
@@ -1381,19 +1379,6 @@ static FONSglyph* fons__getGlyph(FONScontext* stash, FONSfont* font, unsigned in
 		memset( &dst[x * stash->params.pixelsize], 0, stash->params.pixelsize);
 		memset( &dst[(x + (gh-1)*stash->params.width) * stash->params.pixelsize], 0, stash->params.pixelsize);
 	}
-
-   {
-      char  filename[ 32];
-      void  *image;
-
-      sprintf( filename, "glyph-cp%d-g%dx%d-s%d-b%d.bmp", codepoint, gw, gh, (int) (scale * 2048.0 + 0.5), stash->params.pixelsize);
-      /* fonts are laying there flipped, so draw bottom to top  */
-      image = &stash->texData[ (glyph->x0 + (glyph->y0 + gh - 1) * stash->params.width) * stash->params.pixelsize];
-      if( stash->params.pixelsize == 4)
-         bmp_rgb32_write_file( filename, image, gw, gh, - stash->params.bytewidth);
-      else
-         bmp_grayscale_write_file( filename, image, gw, gh, - stash->params.bytewidth);
-   }
 
 	// Debug code to color the glyph background
 /*	unsigned char* fdst = &stash->texData[glyph->x0 + glyph->y0 * stash->params.width];
