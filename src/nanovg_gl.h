@@ -269,6 +269,8 @@ struct GLNVGcontext {
 	GLuint stencilFuncMask;
 	GLNVGblend blendFunc;
 	#endif
+
+	int dummyTex;
 };
 typedef struct GLNVGcontext GLNVGcontext;
 
@@ -501,6 +503,8 @@ static void glnvg__getUniforms(GLNVGshader* shader)
 #endif
 }
 
+static int glnvg__renderCreateTexture(void* uptr, int type, int w, int h, int imageFlags, const unsigned char* data);
+
 static int glnvg__renderCreate(void* uptr)
 {
 	GLNVGcontext* gl = (GLNVGcontext*)uptr;
@@ -726,6 +730,10 @@ static int glnvg__renderCreate(void* uptr)
 	glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &align);
 #endif
 	gl->fragSize = sizeof(GLNVGfragUniforms) + align - sizeof(GLNVGfragUniforms) % align;
+
+	// Some platforms does not allow to have samples to unset textures.
+	// Create empty one which is bound when there's no texture specified.
+	gl->dummyTex = glnvg__renderCreateTexture(gl, NVG_TEXTURE_ALPHA, 1, 1, 0, NULL);
 
 	glnvg__checkError(gl, "create done");
 
@@ -1000,6 +1008,7 @@ static GLNVGfragUniforms* nvg__fragUniformPtr(GLNVGcontext* gl, int i);
 
 static void glnvg__setUniforms(GLNVGcontext* gl, int uniformOffset, int image)
 {
+	GLNVGtexture* tex = NULL;
 #if NANOVG_GL_USE_UNIFORMBUFFER
 	glBindBufferRange(GL_UNIFORM_BUFFER, GLNVG_FRAG_BINDING, gl->fragBuf, uniformOffset, sizeof(GLNVGfragUniforms));
 #else
@@ -1008,12 +1017,14 @@ static void glnvg__setUniforms(GLNVGcontext* gl, int uniformOffset, int image)
 #endif
 
 	if (image != 0) {
-		GLNVGtexture* tex = glnvg__findTexture(gl, image);
-		glnvg__bindTexture(gl, tex != NULL ? tex->tex : 0);
-		glnvg__checkError(gl, "tex paint tex");
-	} else {
-		glnvg__bindTexture(gl, 0);
+		tex = glnvg__findTexture(gl, image);
 	}
+	// If no image is set, use empty texture
+	if (tex == NULL) {
+		tex = glnvg__findTexture(gl, gl->dummyTex);
+	}
+	glnvg__bindTexture(gl, tex != NULL ? tex->tex : 0);
+	glnvg__checkError(gl, "tex paint tex");
 }
 
 static void glnvg__renderViewport(void* uptr, float width, float height, float devicePixelRatio)
@@ -1508,7 +1519,7 @@ error:
 }
 
 static void glnvg__renderTriangles(void* uptr, NVGpaint* paint, NVGcompositeOperationState compositeOperation, NVGscissor* scissor,
-								   const NVGvertex* verts, int nverts)
+								   const NVGvertex* verts, int nverts, float fringe)
 {
 	GLNVGcontext* gl = (GLNVGcontext*)uptr;
 	GLNVGcall* call = glnvg__allocCall(gl);
@@ -1531,7 +1542,7 @@ static void glnvg__renderTriangles(void* uptr, NVGpaint* paint, NVGcompositeOper
 	call->uniformOffset = glnvg__allocFragUniforms(gl, 1);
 	if (call->uniformOffset == -1) goto error;
 	frag = nvg__fragUniformPtr(gl, call->uniformOffset);
-	glnvg__convertPaint(gl, frag, paint, scissor, 1.0f, 1.0f, -1.0f);
+   glnvg__convertPaint(gl, frag, paint, scissor, 1.0f, fringe, -1.0f);
 #ifdef NANOVG_CLEARTYPE
    frag->type = (float)( ( paint->drawingFont ) ? NSVG_SHADER_CLEARTYPE : NSVG_SHADER_IMG );
 #else

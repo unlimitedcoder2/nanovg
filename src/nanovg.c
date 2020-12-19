@@ -24,8 +24,11 @@
 #include "nanovg.h"
 #define FONTSTASH_IMPLEMENTATION
 #include "fontstash.h"
+
+#ifndef NVG_NO_STB
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+#endif
 
 #ifdef _MSC_VER
 #pragma warning(disable: 4100)  // unreferenced formal parameter
@@ -818,6 +821,7 @@ void nvgFillPaint(NVGcontext* ctx, NVGpaint paint)
 	nvgTransformMultiply(state->fill.xform, state->xform);
 }
 
+#ifndef NVG_NO_STB
 int nvgCreateImage(NVGcontext* ctx, const char* filename, int imageFlags)
 {
 	int w, h, n, image;
@@ -846,6 +850,7 @@ int nvgCreateImageMem(NVGcontext* ctx, int imageFlags, unsigned char* data, int 
 	stbi_image_free(img);
 	return image;
 }
+#endif
 
 int nvgCreateImageRGBA(NVGcontext* ctx, int w, int h, int imageFlags, const unsigned char* data)
 {
@@ -2448,14 +2453,24 @@ void nvgStroke(NVGcontext* ctx)
 }
 
 // Add fonts
-int nvgCreateFont(NVGcontext* ctx, const char* name, const char* path)
+int nvgCreateFont(NVGcontext* ctx, const char* name, const char* filename)
 {
-	return fonsAddFont(ctx->fs, name, path);
+	return fonsAddFont(ctx->fs, name, filename, 0);
+}
+
+int nvgCreateFontAtIndex(NVGcontext* ctx, const char* name, const char* filename, const int fontIndex)
+{
+	return fonsAddFont(ctx->fs, name, filename, fontIndex);
 }
 
 int nvgCreateFontMem(NVGcontext* ctx, const char* name, unsigned char* data, int ndata, int freeData)
 {
-	return fonsAddFontMem(ctx->fs, name, data, ndata, freeData);
+	return fonsAddFontMem(ctx->fs, name, data, ndata, freeData, 0);
+}
+
+int nvgCreateFontMemAtIndex(NVGcontext* ctx, const char* name, unsigned char* data, int ndata, int freeData, const int fontIndex)
+{
+	return fonsAddFontMem(ctx->fs, name, data, ndata, freeData, fontIndex);
 }
 
 int nvgFindFont(NVGcontext* ctx, const char* name)
@@ -2474,6 +2489,16 @@ int nvgAddFallbackFontId(NVGcontext* ctx, int baseFont, int fallbackFont)
 int nvgAddFallbackFont(NVGcontext* ctx, const char* baseFont, const char* fallbackFont)
 {
 	return nvgAddFallbackFontId(ctx, nvgFindFont(ctx, baseFont), nvgFindFont(ctx, fallbackFont));
+}
+
+void nvgResetFallbackFontsId(NVGcontext* ctx, int baseFont)
+{
+	fonsResetFallbackFont(ctx->fs, baseFont);
+}
+
+void nvgResetFallbackFonts(NVGcontext* ctx, const char* baseFont)
+{
+	nvgResetFallbackFontsId(ctx, nvgFindFont(ctx, baseFont));
 }
 
 // State setting
@@ -2588,11 +2613,11 @@ static void nvg__renderText(NVGcontext* ctx, NVGvertex* verts, int nverts)
 	paint.outerColor.a *= state->alpha;
 
 #ifdef NANOVG_CLEARTYPE
-   // even if we have no proper LCD info, the drawing looks better or same 
+   // even if we have no proper LCD info, the drawing looks better or same
    // with it
    paint.drawingFont = 1;
 #endif
-	ctx->params.renderTriangles(ctx->params.userPtr, &paint, state->compositeOperation, &state->scissor, verts, nverts);
+   ctx->params.renderTriangles(ctx->params.userPtr, &paint, state->compositeOperation, &state->scissor, verts, nverts, ctx->fringeWidth);
 
 	ctx->drawCallCount++;
 	ctx->textTriCount += nverts/3;
@@ -2608,6 +2633,7 @@ float nvgText(NVGcontext* ctx, float x, float y, const char* string, const char*
 	float invscale = 1.0f / scale;
 	int cverts = 0;
 	int nverts = 0;
+   float transx, transy;
 
 	if (end == NULL)
 		end = string + strlen(string);
@@ -2623,6 +2649,8 @@ float nvgText(NVGcontext* ctx, float x, float y, const char* string, const char*
 	cverts = nvg__maxi(2, (int)(end - string)) * 6; // conservative estimate.
 	verts = nvg__allocTempVerts(ctx, cverts);
 	if (verts == NULL) return x;
+
+   nvgTransformPoint(&transx, &transy, state->xform, 0, 1);
 
 	fonsTextIterInit(ctx->fs, &iter, x*scale, y*scale, string, end, FONS_GLYPH_BITMAP_REQUIRED);
 	prevIter = iter;
@@ -2641,20 +2669,41 @@ float nvgText(NVGcontext* ctx, float x, float y, const char* string, const char*
 				break;
 		}
 		prevIter = iter;
-		// Transform corners.
-		nvgTransformPoint(&c[0],&c[1], state->xform, q.x0*invscale, q.y0*invscale);
-		nvgTransformPoint(&c[2],&c[3], state->xform, q.x1*invscale, q.y0*invscale);
-		nvgTransformPoint(&c[4],&c[5], state->xform, q.x1*invscale, q.y1*invscale);
-		nvgTransformPoint(&c[6],&c[7], state->xform, q.x0*invscale, q.y1*invscale);
-		// Create triangles
-		if (nverts+6 <= cverts) {
-			nvg__vset(&verts[nverts], c[0], c[1], q.s0, q.t0); nverts++;
-			nvg__vset(&verts[nverts], c[4], c[5], q.s1, q.t1); nverts++;
-			nvg__vset(&verts[nverts], c[2], c[3], q.s1, q.t0); nverts++;
-			nvg__vset(&verts[nverts], c[0], c[1], q.s0, q.t0); nverts++;
-			nvg__vset(&verts[nverts], c[6], c[7], q.s0, q.t1); nverts++;
-			nvg__vset(&verts[nverts], c[4], c[5], q.s1, q.t1); nverts++;
-		}
+      if( transy < 0.0)  // flip vertically ?
+      {
+         nvgTransformPoint(&c[6],&c[7], state->xform, q.x0*invscale, q.y0*invscale);
+         nvgTransformPoint(&c[4],&c[5], state->xform, q.x1*invscale, q.y0*invscale);
+         nvgTransformPoint(&c[2],&c[3], state->xform, q.x1*invscale, q.y1*invscale);
+         nvgTransformPoint(&c[0],&c[1], state->xform, q.x0*invscale, q.y1*invscale);
+
+
+         if (nverts+6 <= cverts) {
+           nvg__vset(&verts[nverts], c[0], c[1], q.s0, q.t1); nverts++;
+           nvg__vset(&verts[nverts], c[4], c[5], q.s1, q.t0); nverts++;
+           nvg__vset(&verts[nverts], c[2], c[3], q.s1, q.t1); nverts++;
+
+           nvg__vset(&verts[nverts], c[0], c[1], q.s0, q.t1); nverts++;
+           nvg__vset(&verts[nverts], c[6], c[7], q.s0, q.t0); nverts++;
+           nvg__vset(&verts[nverts], c[4], c[5], q.s1, q.t0); nverts++;
+         }
+      }
+      else
+      {
+   		// Transform corners.
+   		nvgTransformPoint(&c[0],&c[1], state->xform, q.x0*invscale, q.y0*invscale);
+   		nvgTransformPoint(&c[2],&c[3], state->xform, q.x1*invscale, q.y0*invscale);
+   		nvgTransformPoint(&c[4],&c[5], state->xform, q.x1*invscale, q.y1*invscale);
+   		nvgTransformPoint(&c[6],&c[7], state->xform, q.x0*invscale, q.y1*invscale);
+   		// Create triangles
+   		if (nverts+6 <= cverts) {
+   			nvg__vset(&verts[nverts], c[0], c[1], q.s0, q.t0); nverts++;
+   			nvg__vset(&verts[nverts], c[4], c[5], q.s1, q.t1); nverts++;
+   			nvg__vset(&verts[nverts], c[2], c[3], q.s1, q.t0); nverts++;
+   			nvg__vset(&verts[nverts], c[0], c[1], q.s0, q.t0); nverts++;
+   			nvg__vset(&verts[nverts], c[6], c[7], q.s0, q.t1); nverts++;
+   			nvg__vset(&verts[nverts], c[4], c[5], q.s1, q.t1); nverts++;
+   		}
+      }
 	}
 
 	// TODO: add back-end bit to do this just once per frame.
@@ -2853,7 +2902,7 @@ int nvgTextBreakLines(NVGcontext* ctx, const char* string, const char* end, floa
 					rowStartX = iter.x;
 					rowStart = iter.str;
 					rowEnd = iter.next;
-					rowWidth = iter.nextx - rowStartX; // q.x1 - rowStartX;
+					rowWidth = iter.nextx - rowStartX;
 					rowMinX = q.x0 - rowStartX;
 					rowMaxX = q.x1 - rowStartX;
 					wordStart = iter.str;
@@ -2883,7 +2932,7 @@ int nvgTextBreakLines(NVGcontext* ctx, const char* string, const char* end, floa
 				if ((ptype == NVG_SPACE && (type == NVG_CHAR || type == NVG_CJK_CHAR)) || type == NVG_CJK_CHAR) {
 					wordStart = iter.str;
 					wordStartX = iter.x;
-					wordMinX = q.x0 - rowStartX;
+					wordMinX = q.x0;
 				}
 
 				// Break to new line when a character is beyond break width.
@@ -2920,13 +2969,13 @@ int nvgTextBreakLines(NVGcontext* ctx, const char* string, const char* end, floa
 						nrows++;
 						if (nrows >= maxRows)
 							return nrows;
+						// Update row
 						rowStartX = wordStartX;
 						rowStart = wordStart;
 						rowEnd = iter.next;
 						rowWidth = iter.nextx - rowStartX;
-						rowMinX = wordMinX;
+						rowMinX = wordMinX - rowStartX;
 						rowMaxX = q.x1 - rowStartX;
-						// No change to the word start
 					}
 					// Set null break point
 					breakEnd = rowStart;
