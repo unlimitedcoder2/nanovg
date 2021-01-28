@@ -2623,6 +2623,12 @@ static void nvg__renderText(NVGcontext* ctx, NVGvertex* verts, int nverts)
 	ctx->textTriCount += nverts/3;
 }
 
+static int nvg__isTransformFlipped(const float *xform)
+{
+	float det = xform[0] * xform[3] - xform[2] * xform[1];
+	return( det < 0);
+}
+
 float nvgText(NVGcontext* ctx, float x, float y, const char* string, const char* end)
 {
 	NVGstate* state = nvg__getState(ctx);
@@ -2633,7 +2639,7 @@ float nvgText(NVGcontext* ctx, float x, float y, const char* string, const char*
 	float invscale = 1.0f / scale;
 	int cverts = 0;
 	int nverts = 0;
-   float transx, transy;
+	int isFlipped = nvg__isTransformFlipped(state->xform);
 
 	if (end == NULL)
 		end = string + strlen(string);
@@ -2669,41 +2675,26 @@ float nvgText(NVGcontext* ctx, float x, float y, const char* string, const char*
 				break;
 		}
 		prevIter = iter;
-      if( transy < 0.0)  // flip vertically ?
-      {
-         nvgTransformPoint(&c[6],&c[7], state->xform, q.x0*invscale, q.y0*invscale);
-         nvgTransformPoint(&c[4],&c[5], state->xform, q.x1*invscale, q.y0*invscale);
-         nvgTransformPoint(&c[2],&c[3], state->xform, q.x1*invscale, q.y1*invscale);
-         nvgTransformPoint(&c[0],&c[1], state->xform, q.x0*invscale, q.y1*invscale);
+		if(isFlipped) {
+			float tmp;
 
-
-         if (nverts+6 <= cverts) {
-           nvg__vset(&verts[nverts], c[0], c[1], q.s0, q.t1); nverts++;
-           nvg__vset(&verts[nverts], c[4], c[5], q.s1, q.t0); nverts++;
-           nvg__vset(&verts[nverts], c[2], c[3], q.s1, q.t1); nverts++;
-
-           nvg__vset(&verts[nverts], c[0], c[1], q.s0, q.t1); nverts++;
-           nvg__vset(&verts[nverts], c[6], c[7], q.s0, q.t0); nverts++;
-           nvg__vset(&verts[nverts], c[4], c[5], q.s1, q.t0); nverts++;
-         }
-      }
-      else
-      {
-   		// Transform corners.
-   		nvgTransformPoint(&c[0],&c[1], state->xform, q.x0*invscale, q.y0*invscale);
-   		nvgTransformPoint(&c[2],&c[3], state->xform, q.x1*invscale, q.y0*invscale);
-   		nvgTransformPoint(&c[4],&c[5], state->xform, q.x1*invscale, q.y1*invscale);
-   		nvgTransformPoint(&c[6],&c[7], state->xform, q.x0*invscale, q.y1*invscale);
-   		// Create triangles
-   		if (nverts+6 <= cverts) {
-   			nvg__vset(&verts[nverts], c[0], c[1], q.s0, q.t0); nverts++;
-   			nvg__vset(&verts[nverts], c[4], c[5], q.s1, q.t1); nverts++;
-   			nvg__vset(&verts[nverts], c[2], c[3], q.s1, q.t0); nverts++;
-   			nvg__vset(&verts[nverts], c[0], c[1], q.s0, q.t0); nverts++;
-   			nvg__vset(&verts[nverts], c[6], c[7], q.s0, q.t1); nverts++;
-   			nvg__vset(&verts[nverts], c[4], c[5], q.s1, q.t1); nverts++;
-   		}
-      }
+			tmp = q.y0; q.y0 = q.y1; q.y1 = tmp;
+			tmp = q.t0; q.t0 = q.t1; q.t1 = tmp;
+		}
+		// Transform corners.
+		nvgTransformPoint(&c[0],&c[1], state->xform, q.x0*invscale, q.y0*invscale);
+		nvgTransformPoint(&c[2],&c[3], state->xform, q.x1*invscale, q.y0*invscale);
+		nvgTransformPoint(&c[4],&c[5], state->xform, q.x1*invscale, q.y1*invscale);
+		nvgTransformPoint(&c[6],&c[7], state->xform, q.x0*invscale, q.y1*invscale);
+		// Create triangles
+		if (nverts+6 <= cverts) {
+			nvg__vset(&verts[nverts], c[0], c[1], q.s0, q.t0); nverts++;
+			nvg__vset(&verts[nverts], c[4], c[5], q.s1, q.t1); nverts++;
+			nvg__vset(&verts[nverts], c[2], c[3], q.s1, q.t0); nverts++;
+			nvg__vset(&verts[nverts], c[0], c[1], q.s0, q.t0); nverts++;
+			nvg__vset(&verts[nverts], c[6], c[7], q.s0, q.t1); nverts++;
+			nvg__vset(&verts[nverts], c[4], c[5], q.s1, q.t1); nverts++;
+		}
 	}
 
 	// TODO: add back-end bit to do this just once per frame.

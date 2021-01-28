@@ -1544,9 +1544,9 @@ static void glnvg__renderTriangles(void* uptr, NVGpaint* paint, NVGcompositeOper
 	frag = nvg__fragUniformPtr(gl, call->uniformOffset);
    glnvg__convertPaint(gl, frag, paint, scissor, 1.0f, fringe, -1.0f);
 #ifdef NANOVG_CLEARTYPE
-   frag->type = (float)( ( paint->drawingFont ) ? NSVG_SHADER_CLEARTYPE : NSVG_SHADER_IMG );
+   frag->type = (paint->drawingFont) ? NSVG_SHADER_CLEARTYPE : NSVG_SHADER_IMG;
 #else
-   frag->type = (float)NSVG_SHADER_IMG;
+   frag->type = NSVG_SHADER_IMG;
 #endif
 	return;
 
