@@ -2999,7 +2999,11 @@ float nvgTextBounds(NVGcontext* ctx, float x, float y, const char* string, const
 	float invscale = 1.0f / scale;
 	float width;
 
-	if (state->fontId == FONS_INVALID) return 0;
+	if (state->fontId == FONS_INVALID) {
+		if (bounds != NULL)
+			bounds[0] = bounds[1] = bounds[2] = bounds[3] = 0.0f;
+		return 0.0;
+	}
 
 	fonsSetSize(ctx->fs, state->fontSize*scale);
 	fonsSetSpacing(ctx->fs, state->letterSpacing*scale);
@@ -3028,7 +3032,11 @@ float nvgTextMinimalBounds(NVGcontext* ctx, float x, float y, const char* string
    int  iblur;
    int  pad;
 
-	if (state->fontId == FONS_INVALID) return 0;
+	if (state->fontId == FONS_INVALID) {
+		if (bounds != NULL)
+			bounds[0] = bounds[1] = bounds[2] = bounds[3] = 0.0f;
+		return 0.0;
+	}
 
 	fonsSetSize(ctx->fs, state->fontSize*scale);
 	fonsSetSpacing(ctx->fs, state->letterSpacing*scale);
