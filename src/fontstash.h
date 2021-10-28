@@ -157,6 +157,7 @@ void fonsDrawDebug(FONScontext* s, float x, float y);
 #include FT_FREETYPE_H
 #include FT_ADVANCES_H
 #include <math.h>
+#include <assert.h>
 
 #ifdef NANOVG_CLEARTYPE
 # ifndef FT_CONFIG_OPTION_SUBPIXEL_RENDERING
@@ -171,34 +172,43 @@ struct FONSttFontImpl {
 };
 typedef struct FONSttFontImpl FONSttFontImpl;
 
-static FT_Library ftLibrary;
+
+static FT_Library   fons__tt_getFtLibrary(FONScontext* context);
+static void         fons__tt_setFtLibrary(FONScontext* context, FT_Library library);
 
 int fons__tt_init(FONScontext *context)
 {
+	FT_Library ftLibrary;
 	FT_Error ftError;
-	FONS_NOTUSED(context);
+
+	assert( sizeof( FT_Library) == sizeof( void *));
 	ftError = FT_Init_FreeType(&ftLibrary);
 #ifdef NANOVG_CLEARTYPE
    if( ftError == 0 )
       ftError = FT_Library_SetLcdFilter( ftLibrary, FT_LCD_FILTER_DEFAULT );
 #endif
+	fons__tt_setFtLibrary(context, ftLibrary);
+
 	return ftError == 0;
 }
 
 int fons__tt_done(FONScontext *context)
 {
+	FT_Library ftLibrary;
 	FT_Error ftError;
-	FONS_NOTUSED(context);
+
+	ftLibrary = fons__tt_getFtLibrary(context);
 	ftError = FT_Done_FreeType(ftLibrary);
 	return ftError == 0;
 }
 
 int fons__tt_loadFont(FONScontext *context, FONSttFontImpl *font, unsigned char *data, int dataSize, int fontIndex)
 {
+	FT_Library ftLibrary;
 	FT_Error ftError;
-	FONS_NOTUSED(context);
 
 	//font->font.userdata = stash;
+	ftLibrary = fons__tt_getFtLibrary(context);
 	ftError = FT_New_Memory_Face(ftLibrary, (const FT_Byte*)data, dataSize, fontIndex, &font->font);
 	return ftError == 0;
 }
@@ -637,7 +647,7 @@ struct FONSstate
 typedef struct FONSstate FONSstate;
 
 struct FONSatlasNode {
-    short x, y, width;
+	 short x, y, width;
 };
 typedef struct FONSatlasNode FONSatlasNode;
 
@@ -670,6 +680,7 @@ struct FONScontext
 	int nstates;
 	void (*handleError)(void* uptr, int error, int val);
 	void* errorUptr;
+	void* ftLibrary; // truetype handle
 };
 
 #ifdef STB_TRUETYPE_IMPLEMENTATION
@@ -701,6 +712,20 @@ static void fons__tmpfree(void* ptr, void* up)
 
 #endif // STB_TRUETYPE_IMPLEMENTATION
 
+#ifdef FONS_USE_FREETYPE
+
+static FT_Library fons__tt_getFtLibrary(FONScontext* context)
+{
+	return(context->ftLibrary);
+}
+
+static void   fons__tt_setFtLibrary(FONScontext* context, FT_Library library)
+{
+	context->ftLibrary = library;
+}
+
+#endif
+
 // Copyright (c) 2008-2010 Bjoern Hoehrmann <bjoern@hoehrmann.de>
 // See http://bjoern.hoehrmann.de/utf-8/decoder/dfa/ for details.
 
@@ -728,11 +753,11 @@ static unsigned int fons__decutf8(unsigned int* state, unsigned int* codep, unsi
 		12,12,12,12,12,12,12,24,12,12,12,12, 12,24,12,12,12,12,12,12,12,24,12,12,
 		12,12,12,12,12,12,12,36,12,36,12,12, 12,36,12,12,12,12,12,36,12,36,12,12,
 		12,36,12,12,12,12,12,12,12,12,12,12,
-    };
+	};
 
 	unsigned int type = utf8d[byte];
 
-    *codep = (*state != FONS_UTF8_ACCEPT) ?
+	*codep = (*state != FONS_UTF8_ACCEPT) ?
 		(byte & 0x3fu) | (*codep << 6) :
 		(0xff >> type) & (byte);
 
@@ -1423,8 +1448,8 @@ static FONSglyph* fons__getGlyph(FONScontext* stash, FONSfont* font, unsigned in
 }
 
 static void fons__getQuad(FONScontext* stash, FONSfont* font,
-						   int prevGlyphIndex, FONSglyph* glyph,
-						   float scale, float spacing, float* x, float* y, FONSquad* q)
+						  int prevGlyphIndex, FONSglyph* glyph,
+						  float scale, float spacing, float* x, float* y, FONSquad* q)
 {
 	float rx,ry,xoff,yoff,x0,y0,x1,y1;
 
