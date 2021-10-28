@@ -387,13 +387,29 @@ static GLNVGtexture* glnvg__findTexture(GLNVGcontext* gl, int id)
 static int glnvg__deleteTexture(GLNVGcontext* gl, int id)
 {
 	int i;
+   int max;
+   int compress;
+
+   compress = 0;
+   max = 0;  // opportunity to compress
 	for (i = 0; i < gl->ntextures; i++) {
 		if (gl->textures[i].id == id) {
 			if (gl->textures[i].tex != 0 && (gl->textures[i].flags & NVG_IMAGE_NODELETE) == 0)
 				glDeleteTextures(1, &gl->textures[i].tex);
 			memset(&gl->textures[i], 0, sizeof(gl->textures[i]));
+
+         if( gl->textureId != id)  // can compress if this is the last
 			return 1;
+         // run through loop collecting max
+         compress = 1;
 		}
+      if( gl->textures[i].id > max)
+         max = gl->textures[i].id;
+	}
+   if( compress)
+   {
+      gl->textureId = max;
+      return 1;
 	}
 	return 0;
 }
