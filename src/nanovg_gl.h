@@ -399,7 +399,7 @@ static int glnvg__deleteTexture(GLNVGcontext* gl, int id)
 			memset(&gl->textures[i], 0, sizeof(gl->textures[i]));
 
          if( gl->textureId != id)  // can compress if this is the last
-			return 1;
+			   return 1;
          // run through loop collecting max
          compress = 1;
 		}
@@ -410,7 +410,7 @@ static int glnvg__deleteTexture(GLNVGcontext* gl, int id)
    {
       gl->textureId = max;
       return 1;
-	}
+   }
 	return 0;
 }
 
@@ -862,6 +862,49 @@ static int glnvg__renderCreateTexture(void* uptr, int type, int w, int h, int im
 
 	return tex->id;
 }
+
+// @mulle-nanovg@ >>
+static int glnvg__renderDefineTexture(void* uptr, int w, int h, int flags, int type, void *texture)
+{
+	GLNVGcontext* gl = (GLNVGcontext*)uptr;
+	GLNVGtexture* tex;
+
+	tex = glnvg__allocTexture(gl);
+
+	tex->width  = w;
+	tex->height = h;
+	tex->flags  = flags;
+	tex->type   = type;
+	tex->tex    = (int) (intptr_t) texture;
+
+	return tex->id;
+}
+
+
+static int   glnvg__renderGetTextureInfo(void* uptr, int image, int *p_flags, int *p_type, void **p_tex)
+{
+	GLNVGcontext* gl = (GLNVGcontext*)uptr;
+	GLNVGtexture* tex = glnvg__findTexture(gl, image);
+
+   if( p_flags)
+      *p_flags = tex->flags;
+   if( p_type)
+      *p_type  = tex->type;
+   if( p_tex)
+      *p_tex   = (void *) (intptr_t) tex->tex;
+   return( 1);
+}
+
+static int glnvg__renderForgetTexture(void* uptr, int image)
+{
+	GLNVGcontext* gl = (GLNVGcontext*)uptr;
+	GLNVGtexture* tex = glnvg__findTexture(gl, image);
+
+   tex->tex = 0;
+	return 1;
+}
+
+// @mulle-nanovg@ <<
 
 
 static int glnvg__renderDeleteTexture(void* uptr, int image)
@@ -1626,8 +1669,13 @@ NVGcontext* nvgCreateGLES3(int flags)
 	params.renderCreate = glnvg__renderCreate;
 	params.renderCreateTexture = glnvg__renderCreateTexture;
 	params.renderDeleteTexture = glnvg__renderDeleteTexture;
-	params.renderUpdateTexture = glnvg__renderUpdateTexture;
+// @mulle-nanovg@ >>
+	params.renderDefineTexture = glnvg__renderDefineTexture;
+	params.renderForgetTexture = glnvg__renderForgetTexture;
+	params.renderGetTextureInfo = glnvg__renderGetTextureInfo;
+// @mulle-nanovg@ <<
 	params.renderGetTextureSize = glnvg__renderGetTextureSize;
+	params.renderUpdateTexture = glnvg__renderUpdateTexture;
 	params.renderViewport = glnvg__renderViewport;
 	params.renderCancel = glnvg__renderCancel;
 	params.renderFlush = glnvg__renderFlush;

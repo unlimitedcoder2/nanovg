@@ -394,6 +394,12 @@ int nvgCreateImageMem(NVGcontext* ctx, int imageFlags, unsigned char* data, int 
 // Returns handle to the image.
 int nvgCreateImageRGBA(NVGcontext* ctx, int w, int h, int imageFlags, const unsigned char* data);
 
+// Copies an image from another context. The src context must have the same
+// shareId as the dst context. In order to share images, the windows these
+// contexts belong to, must have been created with object sharing.
+// Returns handle to the image.
+int nvgCreateImageTexture(NVGcontext* ctx, int w, int h, int imageFlags, int type, void **texture);
+
 // Updates image data specified by image handle.
 void nvgUpdateImage(NVGcontext* ctx, int image, const unsigned char* data);
 
@@ -402,6 +408,13 @@ void nvgImageSize(NVGcontext* ctx, int image, int* w, int* h);
 
 // Deletes created image.
 void nvgDeleteImage(NVGcontext* ctx, int image);
+
+// Get the OpenGL/Vulkan texture opaque handle (OpenGL is really unsigned int)
+void nvgImageTextureInfo( NVGcontext* ctx, int image, int *imageFlags, int *type, void **texture);
+
+// Relinquish OpenGL/Vulkan texture id, so it won't be delete when the
+// image is deleted
+void nvgForgetImageTexture(NVGcontext* ctx, int image);
 
 //
 // Paints
@@ -697,6 +710,11 @@ struct NVGparams {
 	void (*renderStroke)(void* uptr, NVGpaint* paint, NVGcompositeOperationState compositeOperation, NVGscissor* scissor, float fringe, float strokeWidth, const NVGpath* paths, int npaths);
 	void (*renderTriangles)(void* uptr, NVGpaint* paint, NVGcompositeOperationState compositeOperation, NVGscissor* scissor, const NVGvertex* verts, int nverts, float fringe);
 	void (*renderDelete)(void* uptr);
+// @mulle-nanovg@ >>
+	int (*renderDefineTexture)(void* uptr, int w, int h, int type, int flags, void *texture);
+   int (*renderForgetTexture)(void* uptr, int image);
+	int (*renderGetTextureInfo)(void* uptr, int image, int *type, int *flags, void **texture);
+// @mulle-nanovg@ <<
 };
 typedef struct NVGparams NVGparams;
 

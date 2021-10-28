@@ -857,6 +857,29 @@ int nvgCreateImageRGBA(NVGcontext* ctx, int w, int h, int imageFlags, const unsi
 	return ctx->params.renderCreateTexture(ctx->params.userPtr, NVG_TEXTURE_RGBA, w, h, imageFlags, data);
 }
 
+// @mulle-nanovg@ >>
+int nvgCreateImageTexture( NVGcontext* ctx, int w, int h, int imageFlags, int type, void **texture)
+{
+	return ctx->params.renderDefineTexture( ctx->params.userPtr,
+                                           w,
+                                           h,
+                                           imageFlags,
+                                           type,
+                                           texture);
+}
+
+void  nvgImageTextureInfo( NVGcontext* ctx, int image, int *imageFlags, int *type, void **texture)
+{
+	ctx->params.renderGetTextureInfo(ctx->params.userPtr, image, imageFlags, type, texture);
+}
+
+void nvgForgetImageTexture(NVGcontext* ctx, int image)
+{
+	ctx->params.renderForgetTexture(ctx->params.userPtr, image);
+}
+// @mulle-nanovg@ <<
+
+
 void nvgUpdateImage(NVGcontext* ctx, int image, const unsigned char* data)
 {
 	int w, h;
