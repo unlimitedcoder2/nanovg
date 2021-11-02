@@ -394,11 +394,6 @@ int nvgCreateImageMem(NVGcontext* ctx, int imageFlags, unsigned char* data, int 
 // Returns handle to the image.
 int nvgCreateImageRGBA(NVGcontext* ctx, int w, int h, int imageFlags, const unsigned char* data);
 
-// Copies an image from another context. The src context must have the same
-// shareId as the dst context. In order to share images, the windows these
-// contexts belong to, must have been created with object sharing.
-// Returns handle to the image.
-int nvgCreateImageTexture(NVGcontext* ctx, int w, int h, int imageFlags, int type, void **texture);
 
 // Updates image data specified by image handle.
 void nvgUpdateImage(NVGcontext* ctx, int image, const unsigned char* data);
@@ -409,12 +404,20 @@ void nvgImageSize(NVGcontext* ctx, int image, int* w, int* h);
 // Deletes created image.
 void nvgDeleteImage(NVGcontext* ctx, int image);
 
+// @mulle-nanovg@ >
+// This is like nvglCreateImageFromHandleGL3
+// shareId as the dst context. In order to share images, the windows these
+// contexts belong to, must have been created with object sharing.
+// Returns handle to the image.
+int nvgCreateImageTexture(NVGcontext* ctx, int w, int h, int imageFlags, int type, void **texture);
+
 // Get the OpenGL/Vulkan texture opaque handle (OpenGL is really unsigned int)
 void nvgImageTextureInfo( NVGcontext* ctx, int image, int *imageFlags, int *type, void **texture);
 
 // Relinquish OpenGL/Vulkan texture id, so it won't be delete when the
 // image is deleted
 void nvgForgetImageTexture(NVGcontext* ctx, int image);
+// @mulle-nanovg@ <
 
 //
 // Paints
