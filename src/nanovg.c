@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <memory.h>
+#include <assert.h>
 
 #include "nanovg.h"
 #define FONTSTASH_IMPLEMENTATION
@@ -400,10 +401,25 @@ void nvgBeginFrame(NVGcontext* ctx, float windowWidth, float windowHeight, float
 	ctx->textTriCount = 0;
 }
 
+
+void nvgChangeFrame(NVGcontext* ctx, float windowWidth, float windowHeight, float devicePixelRatio)
+{
+	assert(ctx->nstates);
+
+	ctx->params.renderFlush(ctx->params.userPtr);
+
+	nvgReset(ctx);
+
+	nvg__setDevicePixelRatio(ctx, devicePixelRatio);
+	ctx->params.renderViewport(ctx->params.userPtr, windowWidth, windowHeight, devicePixelRatio);
+}
+
+
 void nvgCancelFrame(NVGcontext* ctx)
 {
 	ctx->params.renderCancel(ctx->params.userPtr);
 }
+
 
 void nvgEndFrame(NVGcontext* ctx)
 {
@@ -641,6 +657,8 @@ static void nvg__setPaintColor(NVGpaint* p, NVGcolor color)
 // State handling
 void nvgSave(NVGcontext* ctx)
 {
+	assert(ctx->nstates < NVG_MAX_STATES);
+
 	if (ctx->nstates >= NVG_MAX_STATES)
 		return;
 	if (ctx->nstates > 0)
@@ -650,6 +668,8 @@ void nvgSave(NVGcontext* ctx)
 
 void nvgRestore(NVGcontext* ctx)
 {
+	assert(ctx->nstates > 1);
+
 	if (ctx->nstates <= 1)
 		return;
 	ctx->nstates--;

@@ -165,6 +165,10 @@ void nvgBeginFrame(NVGcontext* ctx, float windowWidth, float windowHeight, float
 // Cancels drawing the current frame.
 void nvgCancelFrame(NVGcontext* ctx);
 
+// Flushes drawing, then resets current state, changes view port.
+// must be preceeded by a nvgBeginFrame and followed by a nvgEndFrame
+void nvgChangeFrame(NVGcontext* ctx, float windowWidth, float windowHeight, float devicePixelRatio);
+
 // Ends drawing flushing remaining render state.
 void nvgEndFrame(NVGcontext* ctx);
 
@@ -393,7 +397,6 @@ int nvgCreateImageMem(NVGcontext* ctx, int imageFlags, unsigned char* data, int 
 // Creates image from specified image data.
 // Returns handle to the image.
 int nvgCreateImageRGBA(NVGcontext* ctx, int w, int h, int imageFlags, const unsigned char* data);
-
 
 // Updates image data specified by image handle.
 void nvgUpdateImage(NVGcontext* ctx, int image, const unsigned char* data);

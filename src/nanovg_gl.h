@@ -111,6 +111,7 @@ enum NVGimageFlagsGL {
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <assert.h>
 #include "nanovg.h"
 
 enum GLNVGuniformLoc {
@@ -426,6 +427,7 @@ static void glnvg__checkError(GLNVGcontext* gl, const char* str)
 	err = glGetError();
 	if (err != GL_NO_ERROR) {
 		printf("Error %08x after %s\n", err, str);
+		assert( err == GL_NO_ERROR);
 		return;
 	}
 }
