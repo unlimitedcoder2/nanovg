@@ -421,6 +421,12 @@ void nvgCancelFrame(NVGcontext* ctx)
 }
 
 
+void nvgFlushFrame(NVGcontext* ctx)
+{
+	ctx->params.renderFlush(ctx->params.userPtr);
+}
+
+
 void nvgEndFrame(NVGcontext* ctx)
 {
 	ctx->params.renderFlush(ctx->params.userPtr);

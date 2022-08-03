@@ -169,6 +169,10 @@ void nvgCancelFrame(NVGcontext* ctx);
 // must be preceeded by a nvgBeginFrame and followed by a nvgEndFrame
 void nvgChangeFrame(NVGcontext* ctx, float windowWidth, float windowHeight, float devicePixelRatio);
 
+// Just flushes drawing does nothing else. Like nvgEndFrame but does not
+// throw away font texture cache
+void nvgFlushFrame(NVGcontext* ctx);
+
 // Ends drawing flushing remaining render state.
 void nvgEndFrame(NVGcontext* ctx);
 
@@ -409,7 +413,7 @@ void nvgDeleteImage(NVGcontext* ctx, int image);
 
 // @mulle-nanovg@ >
 // This is like nvglCreateImageFromHandleGL3
-// shareId as the dst context. In order to share images, the windows these
+// shareID as the dst context. In order to share images, the windows these
 // contexts belong to, must have been created with object sharing.
 // Returns handle to the image.
 int nvgCreateImageTexture(NVGcontext* ctx, int w, int h, int imageFlags, int type, void **texture);
