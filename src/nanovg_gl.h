@@ -515,6 +515,10 @@ static int glnvg__renderCreate(void* uptr)
 
 	// TODO: mediump float may not be enough for GLES2 in iOS.
 	// see the following discussion: https://github.com/memononen/nanovg/issues/46
+   // For ClearType we need the dFdx function, which is only available
+   // with "GL_OES_standard_derivatives". If you remove dFdx and set deriv
+   // to 0, you can't flip the text (gainly looking)
+   //
 	static const char* shaderHeader =
 #if defined NANOVG_GL2
 		"#define NANOVG_GL2 1\n"
@@ -523,6 +527,7 @@ static int glnvg__renderCreate(void* uptr)
 		"#define NANOVG_GL3 1\n"
 #elif defined NANOVG_GLES2
 		"#version 100\n"
+      "#extension GL_OES_standard_derivatives : enable\n"
 		"#define NANOVG_GL2 1\n"
 #elif defined NANOVG_GLES3
 		"#version 300 es\n"
