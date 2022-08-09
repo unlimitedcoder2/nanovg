@@ -3074,20 +3074,33 @@ float nvgTextBounds(NVGcontext* ctx, float x, float y, const char* string, const
 	return width * invscale;
 }
 
-float nvgTextMinimalBounds(NVGcontext* ctx, float x, float y, const char* string, const char* end, float* bounds)
+void   nvgTextVisualBounds(NVGcontext* ctx, float x, float y, const char* string, const char* end, float bounds[ 6])
 {
 	NVGstate* state = nvg__getState(ctx);
 	float scale = nvg__getFontScale(state) * ctx->devicePxRatio;
 	float invscale = 1.0f / scale;
-	float width;
-   int  iblur;
-   int  pad;
+	FONStextIter iter, prevIter;
+	FONSquad q;
+	int npos = 0;
+	float minx;
+	float miny;
+	float maxx = 0.0f;
+	float maxy;
 
-	if (state->fontId == FONS_INVALID) {
-		if (bounds != NULL)
-			bounds[0] = bounds[1] = bounds[2] = bounds[3] = 0.0f;
-		return 0.0;
-	}
+	if ( ! bounds)
+		return;
+
+	// set to 0 as "error" mode, also if fonsTextIterInit doesn't produce anything
+	// which I guess it might ?
+	bounds[0] = bounds[1] = bounds[2] = bounds[3] = bounds[4] = bounds[5] = 0.0f;
+	if (state->fontId == FONS_INVALID)
+		return;
+
+	if (end == NULL)
+		end = string + strlen(string);
+
+	if (string == end)
+		return;
 
 	fonsSetSize(ctx->fs, state->fontSize*scale);
 	fonsSetSpacing(ctx->fs, state->letterSpacing*scale);
@@ -3095,14 +3108,39 @@ float nvgTextMinimalBounds(NVGcontext* ctx, float x, float y, const char* string
 	fonsSetAlign(ctx->fs, state->textAlign);
 	fonsSetFont(ctx->fs, state->fontId);
 
-	width = fonsTextBounds(ctx->fs, x*scale, y*scale, string, end, bounds);
-	if (bounds != NULL) {
-		bounds[0] *= invscale;
-		bounds[1] *= invscale;
-		bounds[2] *= invscale;
-		bounds[3] *= invscale;
+	fonsTextIterInit(ctx->fs, &iter, x*scale, y*scale, string, end, FONS_GLYPH_BITMAP_OPTIONAL);
+	prevIter = iter;
+	while (fonsTextIterNext(ctx->fs, &iter, &q)) {
+		if (iter.prevGlyphIndex < 0 && nvg__allocTextAtlas(ctx)) { // can not retrieve glyph?
+			iter = prevIter;
+			fonsTextIterNext(ctx->fs, &iter, &q); // try again
+		}
+		prevIter = iter;
+
+		minx = nvg__minf(iter.x, q.x0) * invscale;
+		maxx = nvg__maxf(iter.nextx, q.x1) * invscale;
+		miny = q.y0 * invscale;
+		maxy = q.y1 * invscale;
+
+		if( npos == 0)
+		{
+			bounds[ 0] = minx;
+			bounds[ 1] = miny;
+			bounds[ 3] = maxy;
+		}
+		else
+		{
+			bounds[ 1] = miny < bounds[ 1] ? miny : bounds[ 1];
+			bounds[ 3] = maxy > bounds[ 3] ? maxy : bounds[ 3];
+		}
+		++npos;
 	}
-	return width * invscale;
+	bounds[ 2] = maxx; // sic
+
+	// get textBoxBounds top and height
+	fonsLineBounds(ctx->fs, y*scale, &bounds[ 4], &bounds[ 5]);
+	bounds[ 4] *= invscale;
+	bounds[ 5] *= invscale;
 }
 
 

@@ -645,12 +645,12 @@ void nvgTextBox(NVGcontext* ctx, float x, float y, float breakRowWidth, const ch
 // Measured values are returned in local coordinate space.
 float nvgTextBounds(NVGcontext* ctx, float x, float y, const char* string, const char* end, float* bounds);
 
-// Measures the specified text string. Parameter bounds should be a pointer to float[4],
-// if the bounding box of the text should be returned. The bounds value are [xmin,ymin, xmax,ymax]
-// Returns the horizontal advance of the measured text (i.e. where the next character should drawn).
-// Measured values are returned in local coordinate space. The difference to nvgTextBounds is that
-// the vertical bounds are calculated and not just derived from nvgTextMetrics.
-float nvgTextMinimalBounds(NVGcontext* ctx, float x, float y, const char* string, const char* end, float* bounds);
+// Measures the specified text string. The returned bounds values are [xmin,ymin, xmax,ymax, ytop, ybot].
+// xmin,ymin - xmax,ymax denote the area where actually pixels are drawn. ytop/ybot are the values
+// you'd get from nvgTextBounds bounds[1] and bounds[3]. They are the top and the bottom of the text line.
+// They are all zero, if there was some error, or there is nothing to display.
+// Measured values are returned in local coordinate space.
+void nvgTextVisualBounds(NVGcontext* ctx, float x, float y, const char* string, const char* end, float bounds[ 6]);
 
 // Measures the specified multi-text string. Parameter bounds should be a pointer to float[4],
 // if the bounding box of the text should be returned. The bounds value are [xmin,ymin, xmax,ymax]
