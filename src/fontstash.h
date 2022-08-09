@@ -169,321 +169,14 @@ void fonsDrawDebug(FONScontext* s, float x, float y);
 
 struct FONSttFontImpl {
 	FT_Face font;
+	FT_Int32 ftGlyphRenderFlags;
 };
 typedef struct FONSttFontImpl FONSttFontImpl;
-
-
-static FT_Library   fons__tt_getFtLibrary(FONScontext* context);
-static void         fons__tt_setFtLibrary(FONScontext* context, FT_Library library);
-
-int fons__tt_init(FONScontext *context)
-{
-	FT_Library ftLibrary;
-	FT_Error ftError;
-
-	assert( sizeof( FT_Library) == sizeof( void *));
-	ftError = FT_Init_FreeType(&ftLibrary);
-#ifdef NANOVG_CLEARTYPE
-   if( ftError == 0 )
-      ftError = FT_Library_SetLcdFilter( ftLibrary, FT_LCD_FILTER_DEFAULT );
-#endif
-	fons__tt_setFtLibrary(context, ftLibrary);
-
-	return ftError == 0;
-}
-
-int fons__tt_done(FONScontext *context)
-{
-	FT_Library ftLibrary;
-	FT_Error ftError;
-
-	ftLibrary = fons__tt_getFtLibrary(context);
-	ftError = FT_Done_FreeType(ftLibrary);
-	return ftError == 0;
-}
-
-int fons__tt_loadFont(FONScontext *context, FONSttFontImpl *font, unsigned char *data, int dataSize, int fontIndex)
-{
-	FT_Library ftLibrary;
-	FT_Error ftError;
-
-	//font->font.userdata = stash;
-	ftLibrary = fons__tt_getFtLibrary(context);
-	ftError = FT_New_Memory_Face(ftLibrary, (const FT_Byte*)data, dataSize, fontIndex, &font->font);
-	return ftError == 0;
-}
-
-void fons__tt_getFontVMetrics(FONSttFontImpl *font, int *ascent, int *descent, int *lineGap)
-{
-	*ascent = font->font->ascender;
-	*descent = font->font->descender;
-	*lineGap = font->font->height - (*ascent - *descent);
-}
-
-float fons__tt_getPixelHeightScale(FONSttFontImpl *font, float size)
-{
-	return size / font->font->units_per_EM;
-}
-
-int fons__tt_getGlyphIndex(FONSttFontImpl *font, int codepoint)
-{
-	return FT_Get_Char_Index(font->font, codepoint);
-}
-
-int fons__tt_buildGlyphBitmap(FONSttFontImpl *font, int glyph, float size, float scale,
-							  int *advance, int *lsb, int *x0, int *y0, int *x1, int *y1)
-{
-	FT_Error ftError;
-	FT_GlyphSlot ftGlyph;
-	FT_Fixed advFixed;
-	FONS_NOTUSED(scale);
-
-	ftError = FT_Set_Pixel_Sizes(font->font, 0, size);
-	if (ftError) return 0;
-#ifdef NANOVG_CLEARTYPE
-	ftError = FT_Load_Glyph(font->font, glyph, FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_LCD | FT_LOAD_TARGET_LIGHT);
-#else
-   ftError = FT_Load_Glyph(font->font, glyph, FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_LIGHT);
-#endif
-	if (ftError) return 0;
-	ftError = FT_Get_Advance(font->font, glyph, FT_LOAD_NO_SCALE, &advFixed);
-	if (ftError) return 0;
-	ftGlyph = font->font->glyph;
-	*advance = (int)advFixed;
-	*lsb = (int)ftGlyph->metrics.horiBearingX;
-	*x0 = ftGlyph->bitmap_left;
-#ifdef NANOVG_CLEARTYPE
-   // If not too small for LCD format we get subpixel format
-   if( ftGlyph->bitmap.pixel_mode == 5)
-      *x1 = *x0 + ftGlyph->bitmap.width / 3; // correct for three subpixels
-   else
-      *x1 = *x0 + ftGlyph->bitmap.width;
-#else
-   *x1 = *x0 + ftGlyph->bitmap.width;
-#endif
-	*y0 = -ftGlyph->bitmap_top;
-	*y1 = *y0 + ftGlyph->bitmap.rows;
-	return 1;
-}
-
-
-// Pack 3 grayscale sub-pixel bytes into a single RGBA pixel.
-static inline uint32_t packCleartypeSubpixels( uint8_t* triple )
-{
-   uint32_t res = triple[ 0 ];
-   res |= ( ( (uint32_t)triple[ 1 ] ) << 8 );
-   res |= ( ( (uint32_t)triple[ 2 ] ) << 16 );
-   // On PC GPUs, it's much faster to do in pixel shader. On slow embedded ARM this is probably not the case.
-   // Ideally we might want max, not bitwise OR, but OR is much faster to compute in scalar code, too bad scalar parts of CPUs don't have instructions like pmaxub (PC) / umax (ARM).
-   // This code only runs while building textures, i.e. much less frequent than each frame.
-   uint32_t all = triple[ 0 ] | triple[ 1 ] | triple[ 2 ];
-   res |= ( all << 24 );
-   return res;
-}
-
-static void fons__tt_renderGlyphRGBABitmapLCD(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
-                        float scaleX, float scaleY, int glyph)
-{
-   FT_GlyphSlot ftGlyph = font->font->glyph;
-   int rgbWidth = ftGlyph->bitmap.width / 3;
-   uint8_t* sourceLine = ftGlyph->bitmap.buffer;
-   size_t sourceStride = ftGlyph->bitmap.pitch;
-
-   assert( ftGlyph->bitmap.pixel_mode == FT_PIXEL_MODE_LCD);
-
-   for( uint32_t y = 0; y < ftGlyph->bitmap.rows; y++ )
-   {
-      uint8_t* src = sourceLine;
-      uint32_t *dest = (uint32_t *) output;
-      for( int x = 0; x < rgbWidth; x++ )
-      {
-         *dest = packCleartypeSubpixels( src );
-         src += 3;
-         dest++;
-      }
-      sourceLine += sourceStride;
-      output += outStride;
-   }
-}
-
-// Pack 3 grayscale sub-pixel bytes into a single RGBA pixel.
-static inline uint32_t packRGBAGrayscale( uint8_t color )
-{
-   return( ((uint32_t) color << 24) |
-           ((uint32_t) color << 16) |
-           ((uint32_t) color << 8) |
-           0xFF);
-}
-
-static void fons__tt_renderGlyphRGBABitmapGrayscale(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
-                        float scaleX, float scaleY, int glyph)
-{
-   FT_GlyphSlot ftGlyph = font->font->glyph;
-   int rgbWidth = ftGlyph->bitmap.width;
-   uint8_t* sourceLine = ftGlyph->bitmap.buffer;
-   size_t sourceStride = ftGlyph->bitmap.pitch;
-
-   assert( ftGlyph->bitmap.pixel_mode == FT_PIXEL_MODE_GRAY);
-
-   for( uint32_t y = 0; y < ftGlyph->bitmap.rows; y++ )
-   {
-      uint8_t  *src = sourceLine;
-      uint32_t *dest = (uint32_t *) output;
-      for( int x = 0; x < rgbWidth; x++ )
-      {
-         *dest++ = packRGBAGrayscale( *src++ );
-      }
-      sourceLine += sourceStride;
-      output     += outStride;
-   }
-}
-
-
-static void fons__tt_renderGlyphRGBABitmapMono(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
-                        float scaleX, float scaleY, int glyph)
-{
-   FT_GlyphSlot ftGlyph = font->font->glyph;
-   int rgbWidth = ftGlyph->bitmap.width;
-   uint8_t* sourceLine = ftGlyph->bitmap.buffer;
-   size_t sourceStride = ftGlyph->bitmap.pitch;
-   uint32_t               value;
-   uint32_t               mask;
-   uint32_t               pixel;
-
-   assert( ftGlyph->bitmap.pixel_mode == FT_PIXEL_MODE_MONO);
-
-   for( uint32_t y = 0; y < ftGlyph->bitmap.rows; y++ )
-   {
-      uint8_t  *src = sourceLine;
-      uint32_t *dest = (uint32_t *) output;
-
-      mask = 0x0;
-      for( int x = 0; x < rgbWidth; x++ )
-      {
-         mask >>= 1;
-         if( ! mask)
-         {
-            value = *src++;
-            mask = 0x80;
-         }
-         pixel   = value & mask;
-         *dest++ = packRGBAGrayscale( pixel ? 0xFF : 0x00);
-      }
-      sourceLine += sourceStride;
-      output     += outStride;
-   }
-}
-
-
-static void fons__tt_renderGlyphBitmapGrayscale(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
-								float scaleX, float scaleY, int glyph)
-{
-	FT_GlyphSlot ftGlyph = font->font->glyph;
-	int ftGlyphOffset = 0;
-	unsigned int x, y;
-	FONS_NOTUSED(outWidth);
-	FONS_NOTUSED(outHeight);
-	FONS_NOTUSED(scaleX);
-	FONS_NOTUSED(scaleY);
-	FONS_NOTUSED(glyph);	// glyph has already been loaded by fons__tt_buildGlyphBitmap
-
-   assert( ftGlyph->bitmap.pixel_mode == FT_PIXEL_MODE_GRAY);
-
-	for ( y = 0; y < ftGlyph->bitmap.rows; y++ ) {
-		for ( x = 0; x < ftGlyph->bitmap.width; x++ ) {
-			output[(y * outStride) + x] = ftGlyph->bitmap.buffer[ftGlyphOffset++];
-		}
-	}
-}
-
-
-static void fons__tt_renderGlyphBitmapMono(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
-                        float scaleX, float scaleY, int glyph)
-{
-   FT_GlyphSlot ftGlyph = font->font->glyph;
-   int          rgbWidth = ftGlyph->bitmap.width;
-   uint8_t*     sourceLine = ftGlyph->bitmap.buffer;
-   size_t       sourceStride = ftGlyph->bitmap.pitch;
-   uint32_t     value;
-   uint32_t     mask;
-   uint32_t     pixel;
-
-   assert( ftGlyph->bitmap.pixel_mode == FT_PIXEL_MODE_MONO);
-
-   for( uint32_t y = 0; y < ftGlyph->bitmap.rows; y++ )
-   {
-      uint8_t  *src  = sourceLine;
-      uint8_t  *dest = output;
-
-      mask = 0x0;
-      for( int x = 0; x < rgbWidth; x++ )
-      {
-         mask >>= 1;
-         if( ! mask)
-         {
-            value = *src++;
-            mask = 0x80;
-         }
-         pixel   = value & mask;
-         *dest++ = pixel ? 0xFF : 0x00;
-      }
-      sourceLine += sourceStride;
-      output     += outStride;
-   }
-}
-
-
-void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
-								float scaleX, float scaleY, int glyph)
-{
-	FT_GlyphSlot ftGlyph = font->font->glyph;
-
-#ifdef NANOVG_CLEARTYPE
-   switch( ftGlyph->bitmap.pixel_mode)
-   {
-      case FT_PIXEL_MODE_MONO :
-         fons__tt_renderGlyphRGBABitmapMono( font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
-         break;
-
-      case FT_PIXEL_MODE_GRAY:
-         fons__tt_renderGlyphRGBABitmapGrayscale( font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
-         break;
-
-      case FT_PIXEL_MODE_LCD :
-         fons__tt_renderGlyphRGBABitmapLCD( font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
-         break;
-
-      default:
-         abort();
-   }
-#else
-   switch( ftGlyph->bitmap.pixel_mode)
-   {
-   case FT_PIXEL_MODE_GRAY:
-      fons__tt_renderGlyphBitmapGrayscale( font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
-      break;
-
-   case FT_PIXEL_MODE_MONO :
-      fons__tt_renderGlyphBitmapMono( font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
-      break;
-
-   default:
-      abort();
-   }
-#endif
-}
-
-
-int fons__tt_getGlyphKernAdvance(FONSttFontImpl *font, int glyph1, int glyph2)
-{
-	FT_Vector ftKerning;
-	FT_Get_Kerning(font->font, glyph1, glyph2, FT_KERNING_DEFAULT, &ftKerning);
-	return (int)((ftKerning.x + 32) >> 6);  // Round up and convert to integer
-}
 
 #else
 
 #define STB_TRUETYPE_IMPLEMENTATION
+
 static void* fons__tmpalloc(size_t size, void* up);
 static void fons__tmpfree(void* ptr, void* up);
 #define STBTT_malloc(x,u)    fons__tmpalloc(x,u)
@@ -494,68 +187,6 @@ struct FONSttFontImpl {
 	stbtt_fontinfo font;
 };
 typedef struct FONSttFontImpl FONSttFontImpl;
-
-int fons__tt_init(FONScontext *context)
-{
-	FONS_NOTUSED(context);
-	return 1;
-}
-
-int fons__tt_done(FONScontext *context)
-{
-	FONS_NOTUSED(context);
-	return 1;
-}
-
-int fons__tt_loadFont(FONScontext *context, FONSttFontImpl *font, unsigned char *data, int dataSize, int fontIndex)
-{
-	int offset, stbError;
-	FONS_NOTUSED(dataSize);
-
-	font->font.userdata = context;
-	offset = stbtt_GetFontOffsetForIndex(data, fontIndex);
-	if (offset == -1) {
-		stbError = 0;
-	} else {
-		stbError = stbtt_InitFont(&font->font, data, offset);
-	}
-	return stbError;
-}
-
-void fons__tt_getFontVMetrics(FONSttFontImpl *font, int *ascent, int *descent, int *lineGap)
-{
-	stbtt_GetFontVMetrics(&font->font, ascent, descent, lineGap);
-}
-
-float fons__tt_getPixelHeightScale(FONSttFontImpl *font, float size)
-{
-	return stbtt_ScaleForMappingEmToPixels(&font->font, size);
-}
-
-int fons__tt_getGlyphIndex(FONSttFontImpl *font, int codepoint)
-{
-	return stbtt_FindGlyphIndex(&font->font, codepoint);
-}
-
-int fons__tt_buildGlyphBitmap(FONSttFontImpl *font, int glyph, float size, float scale,
-							  int *advance, int *lsb, int *x0, int *y0, int *x1, int *y1)
-{
-	FONS_NOTUSED(size);
-	stbtt_GetGlyphHMetrics(&font->font, glyph, advance, lsb);
-	stbtt_GetGlyphBitmapBox(&font->font, glyph, scale, scale, x0, y0, x1, y1);
-	return 1;
-}
-
-void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
-								float scaleX, float scaleY, int glyph)
-{
-	stbtt_MakeGlyphBitmap(&font->font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
-}
-
-int fons__tt_getGlyphKernAdvance(FONSttFontImpl *font, int glyph1, int glyph2)
-{
-	return stbtt_GetGlyphKernAdvance(&font->font, glyph1, glyph2);
-}
 
 #endif
 
@@ -680,8 +311,410 @@ struct FONScontext
 	int nstates;
 	void (*handleError)(void* uptr, int error, int val);
 	void* errorUptr;
-	void* ftLibrary; // truetype handle
+#ifdef FONS_USE_FREETYPE
+	FT_Library ftLibrary;
+#endif
 };
+
+#ifdef FONS_USE_FREETYPE
+
+int fons__tt_init(FONScontext *context)
+{
+	FT_Error ftError;
+	FONS_NOTUSED(context);
+	ftError = FT_Init_FreeType(&context->ftLibrary);
+#ifdef NANOVG_CLEARTYPE
+   if( ftError == 0 )
+      ftError = FT_Library_SetLcdFilter(context->ftLibrary, FT_LCD_FILTER_DEFAULT);
+#endif
+	return ftError == 0;
+}
+
+int fons__tt_done(FONScontext *context)
+{
+	FT_Error ftError;
+	FONS_NOTUSED(context);
+	ftError = FT_Done_FreeType(context->ftLibrary);
+	return ftError == 0;
+}
+
+int fons__tt_loadFont(FONScontext *context, FONSttFontImpl *font, unsigned char *data, int dataSize, int fontIndex)
+{
+	FT_Error ftError;
+	FONS_NOTUSED(context);
+
+	ftError = FT_New_Memory_Face(context->ftLibrary, (const FT_Byte*)data, dataSize, fontIndex, &font->font);
+#ifdef NANOVG_CLEARTYPE
+   font->ftGlyphRenderFlags = FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_LIGHT | FT_LOAD_TARGET_LCD;
+#else
+   font->ftGlyphRenderFlags = FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_LIGHT;
+#endif
+
+	return ftError == 0;
+}
+
+void fons__tt_getFontVMetrics(FONSttFontImpl *font, int *ascent, int *descent, int *lineGap)
+{
+	*ascent = font->font->ascender;
+	*descent = font->font->descender;
+	*lineGap = font->font->height - (*ascent - *descent);
+}
+
+float fons__tt_getPixelHeightScale(FONSttFontImpl *font, float size)
+{
+	return size / font->font->units_per_EM;
+}
+
+int fons__tt_getGlyphIndex(FONSttFontImpl *font, int codepoint)
+{
+	return FT_Get_Char_Index(font->font, codepoint);
+}
+
+int fons__tt_buildGlyphBitmap(FONSttFontImpl *font, int glyph, float size, float scale,
+							  int *advance, int *lsb, int *x0, int *y0, int *x1, int *y1,
+							  int bitmapOption)
+{
+	FT_Error ftError;
+	FT_GlyphSlot ftGlyph;
+	FT_Fixed advFixed;
+	FT_Int32 ftGlyphRenderFlags;
+	FONS_NOTUSED(scale);
+
+	ftError = FT_Set_Pixel_Sizes(font->font, 0, size);
+	if (ftError) return 0;
+	ftGlyphRenderFlags = font->ftGlyphRenderFlags;
+	if (bitmapOption == FONS_GLYPH_BITMAP_REQUIRED)
+		ftGlyphRenderFlags |= FT_LOAD_RENDER;
+	ftError = FT_Load_Glyph(font->font, glyph, ftGlyphRenderFlags);
+	if (ftError) return 0;
+	ftError = FT_Get_Advance(font->font, glyph, FT_LOAD_NO_SCALE, &advFixed);
+	if (ftError) return 0;
+	ftGlyph = font->font->glyph;
+	*advance = (int)advFixed;
+	*lsb = (int)ftGlyph->metrics.horiBearingX;
+	*x0 = ftGlyph->bitmap_left;
+#ifdef NANOVG_CLEARTYPE
+   // If not too small for LCD format we get subpixel format
+   if( ftGlyph->bitmap.pixel_mode == 5)
+      *x1 = *x0 + ftGlyph->bitmap.width / 3; // correct for three subpixels
+   else
+      *x1 = *x0 + ftGlyph->bitmap.width;
+#else
+   *x1 = *x0 + ftGlyph->bitmap.width;
+#endif
+   *y0 = -ftGlyph->bitmap_top;
+   *y1 = *y0 + ftGlyph->bitmap.rows;
+	return 1;
+}
+
+#ifdef NANOVG_CLEARTYPE
+
+// Pack 3 grayscale sub-pixel bytes into a single RGBA pixel.
+static inline uint32_t packCleartypeSubpixels( uint8_t* triple )
+{
+   uint32_t res = triple[ 0 ];
+   res |= ( ( (uint32_t)triple[ 1 ] ) << 8 );
+   res |= ( ( (uint32_t)triple[ 2 ] ) << 16 );
+   // On PC GPUs, it's much faster to do in pixel shader. On slow embedded ARM this is probably not the case.
+   // Ideally we might want max, not bitwise OR, but OR is much faster to compute in scalar code, too bad scalar parts of CPUs don't have instructions like pmaxub (PC) / umax (ARM).
+   // This code only runs while building textures, i.e. much less frequent than each frame.
+   uint32_t all = triple[ 0 ] | triple[ 1 ] | triple[ 2 ];
+   res |= ( all << 24 );
+   return res;
+}
+
+static void fons__tt_renderGlyphRGBABitmapLCD(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
+                        float scaleX, float scaleY, int glyph)
+{
+   FT_GlyphSlot ftGlyph = font->font->glyph;
+   int rgbWidth = ftGlyph->bitmap.width / 3;
+   uint8_t* sourceLine = ftGlyph->bitmap.buffer;
+   size_t sourceStride = ftGlyph->bitmap.pitch;
+
+   assert( ftGlyph->bitmap.pixel_mode == FT_PIXEL_MODE_LCD);
+
+   for( uint32_t y = 0; y < ftGlyph->bitmap.rows; y++ )
+   {
+      uint8_t* src = sourceLine;
+      uint32_t *dest = (uint32_t *) output;
+      for( int x = 0; x < rgbWidth; x++ )
+      {
+         *dest = packCleartypeSubpixels( src );
+         src += 3;
+         dest++;
+      }
+      sourceLine += sourceStride;
+      output += outStride;
+   }
+}
+
+// Pack 3 grayscale sub-pixel bytes into a single RGBA pixel.
+static inline uint32_t packRGBAGrayscale( uint8_t color )
+{
+   return( ((uint32_t) color << 24) |
+           ((uint32_t) color << 16) |
+           ((uint32_t) color << 8) |
+           0xFF);
+}
+
+static void fons__tt_renderGlyphRGBABitmapGrayscale(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
+                        float scaleX, float scaleY, int glyph)
+{
+   FT_GlyphSlot ftGlyph = font->font->glyph;
+   int rgbWidth = ftGlyph->bitmap.width;
+   uint8_t* sourceLine = ftGlyph->bitmap.buffer;
+   size_t sourceStride = ftGlyph->bitmap.pitch;
+
+   assert( ftGlyph->bitmap.pixel_mode == FT_PIXEL_MODE_GRAY);
+
+   for( uint32_t y = 0; y < ftGlyph->bitmap.rows; y++ )
+   {
+      uint8_t  *src = sourceLine;
+      uint32_t *dest = (uint32_t *) output;
+      for( int x = 0; x < rgbWidth; x++ )
+      {
+         *dest++ = packRGBAGrayscale( *src++ );
+      }
+      sourceLine += sourceStride;
+      output     += outStride;
+   }
+}
+
+
+static void fons__tt_renderGlyphRGBABitmapMono(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
+                        float scaleX, float scaleY, int glyph)
+{
+   FT_GlyphSlot ftGlyph = font->font->glyph;
+   int rgbWidth = ftGlyph->bitmap.width;
+   uint8_t* sourceLine = ftGlyph->bitmap.buffer;
+   size_t sourceStride = ftGlyph->bitmap.pitch;
+   uint32_t               value;
+   uint32_t               mask;
+   uint32_t               pixel;
+
+   assert( ftGlyph->bitmap.pixel_mode == FT_PIXEL_MODE_MONO);
+
+   for( uint32_t y = 0; y < ftGlyph->bitmap.rows; y++ )
+   {
+      uint8_t  *src = sourceLine;
+      uint32_t *dest = (uint32_t *) output;
+
+      mask = 0x0;
+      for( int x = 0; x < rgbWidth; x++ )
+      {
+         mask >>= 1;
+         if( ! mask)
+         {
+            value = *src++;
+            mask = 0x80;
+         }
+         pixel   = value & mask;
+         *dest++ = packRGBAGrayscale( pixel ? 0xFF : 0x00);
+      }
+      sourceLine += sourceStride;
+      output     += outStride;
+   }
+}
+
+
+static void fons__tt_renderGlyphBitmapGrayscale(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
+                        float scaleX, float scaleY, int glyph)
+{
+   FT_GlyphSlot ftGlyph = font->font->glyph;
+   int ftGlyphOffset = 0;
+   unsigned int x, y;
+   FONS_NOTUSED(outWidth);
+   FONS_NOTUSED(outHeight);
+   FONS_NOTUSED(scaleX);
+   FONS_NOTUSED(scaleY);
+   FONS_NOTUSED(glyph); // glyph has already been loaded by fons__tt_buildGlyphBitmap
+
+   assert( ftGlyph->bitmap.pixel_mode == FT_PIXEL_MODE_GRAY);
+
+   for ( y = 0; y < ftGlyph->bitmap.rows; y++ ) {
+      for ( x = 0; x < ftGlyph->bitmap.width; x++ ) {
+         output[(y * outStride) + x] = ftGlyph->bitmap.buffer[ftGlyphOffset++];
+      }
+   }
+}
+
+
+static void fons__tt_renderGlyphBitmapMono(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
+                        float scaleX, float scaleY, int glyph)
+{
+   FT_GlyphSlot ftGlyph = font->font->glyph;
+   int          rgbWidth = ftGlyph->bitmap.width;
+   uint8_t*     sourceLine = ftGlyph->bitmap.buffer;
+   size_t       sourceStride = ftGlyph->bitmap.pitch;
+   uint32_t     value;
+   uint32_t     mask;
+   uint32_t     pixel;
+
+   assert( ftGlyph->bitmap.pixel_mode == FT_PIXEL_MODE_MONO);
+
+   for( uint32_t y = 0; y < ftGlyph->bitmap.rows; y++ )
+   {
+      uint8_t  *src  = sourceLine;
+      uint8_t  *dest = output;
+
+      mask = 0x0;
+      for( int x = 0; x < rgbWidth; x++ )
+      {
+         mask >>= 1;
+         if( ! mask)
+         {
+            value = *src++;
+            mask = 0x80;
+         }
+         pixel   = value & mask;
+         *dest++ = pixel ? 0xFF : 0x00;
+      }
+      sourceLine += sourceStride;
+      output     += outStride;
+   }
+}
+
+
+
+void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
+                        float scaleX, float scaleY, int glyph)
+{
+   FT_GlyphSlot ftGlyph = font->font->glyph;
+
+   switch( ftGlyph->bitmap.pixel_mode)
+   {
+      case FT_PIXEL_MODE_MONO :
+         fons__tt_renderGlyphRGBABitmapMono( font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
+         break;
+
+      case FT_PIXEL_MODE_GRAY:
+         fons__tt_renderGlyphRGBABitmapGrayscale( font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
+         break;
+
+      case FT_PIXEL_MODE_LCD :
+         fons__tt_renderGlyphRGBABitmapLCD( font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
+         break;
+
+      default:
+         abort();
+   }
+}
+
+#else
+
+
+void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
+								float scaleX, float scaleY, int glyph)
+{
+	FT_GlyphSlot ftGlyph = font->font->glyph;
+	int ftGlyphOffset = 0;
+	unsigned int x, y;
+	FONS_NOTUSED(outWidth);
+	FONS_NOTUSED(outHeight);
+	FONS_NOTUSED(scaleX);
+	FONS_NOTUSED(scaleY);
+	FONS_NOTUSED(glyph);	// glyph has already been loaded by fons__tt_buildGlyphBitmap
+
+	for ( y = 0; y < ftGlyph->bitmap.rows; y++ ) {
+		for ( x = 0; x < ftGlyph->bitmap.width; x++ ) {
+			output[(y * outStride) + x] = ftGlyph->bitmap.buffer[ftGlyphOffset++];
+		}
+	}
+}
+#endif
+
+int fons__tt_getGlyphKernAdvance(FONSttFontImpl *font, int glyph1, int glyph2)
+{
+	FT_Vector ftKerning;
+	FT_Get_Kerning(font->font, glyph1, glyph2, FT_KERNING_DEFAULT, &ftKerning);
+	return (int)((ftKerning.x + 32) >> 6);  // Round up and convert to integer
+}
+
+int fons__tt_getGlyphRenderFlags(FONSttFontImpl *font)
+{
+	return font->ftGlyphRenderFlags;
+}
+
+void fons__tt_setGlyphRenderFlags(FONSttFontImpl *font, int flags)
+{
+	font->ftGlyphRenderFlags = flags;
+}
+
+#else
+
+int fons__tt_init(FONScontext *context)
+{
+	FONS_NOTUSED(context);
+	return 1;
+}
+
+int fons__tt_done(FONScontext *context)
+{
+	FONS_NOTUSED(context);
+	return 1;
+}
+
+int fons__tt_loadFont(FONScontext *context, FONSttFontImpl *font, unsigned char *data, int dataSize, int fontIndex)
+{
+	int offset, stbError;
+	FONS_NOTUSED(dataSize);
+
+	font->font.userdata = context;
+	offset = stbtt_GetFontOffsetForIndex(data, fontIndex);
+	if (offset == -1) {
+		stbError = 0;
+	} else {
+		stbError = stbtt_InitFont(&font->font, data, offset);
+	}
+	return stbError;
+}
+
+void fons__tt_getFontVMetrics(FONSttFontImpl *font, int *ascent, int *descent, int *lineGap)
+{
+	stbtt_GetFontVMetrics(&font->font, ascent, descent, lineGap);
+}
+
+float fons__tt_getPixelHeightScale(FONSttFontImpl *font, float size)
+{
+	return stbtt_ScaleForMappingEmToPixels(&font->font, size);
+}
+
+int fons__tt_getGlyphIndex(FONSttFontImpl *font, int codepoint)
+{
+	return stbtt_FindGlyphIndex(&font->font, codepoint);
+}
+
+int fons__tt_buildGlyphBitmap(FONSttFontImpl *font, int glyph, float size, float scale,
+							  int *advance, int *lsb, int *x0, int *y0, int *x1, int *y1,
+							  int bitmapOption)
+{
+	FONS_NOTUSED(size);
+	stbtt_GetGlyphHMetrics(&font->font, glyph, advance, lsb);
+	stbtt_GetGlyphBitmapBox(&font->font, glyph, scale, scale, x0, y0, x1, y1);
+	return 1;
+}
+
+void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
+								float scaleX, float scaleY, int glyph)
+{
+	stbtt_MakeGlyphBitmap(&font->font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
+}
+
+int fons__tt_getGlyphKernAdvance(FONSttFontImpl *font, int glyph1, int glyph2)
+{
+	return stbtt_GetGlyphKernAdvance(&font->font, glyph1, glyph2);
+}
+
+int fons__tt_getGlyphRenderFlags(FONSttFontImpl *font)
+{
+	return 0;
+}
+
+void fons__tt_setGlyphRenderFlags(FONSttFontImpl *font, int flags)
+{
+}
+
+#endif
 
 #ifdef STB_TRUETYPE_IMPLEMENTATION
 
@@ -1362,7 +1395,7 @@ static FONSglyph* fons__getGlyph(FONScontext* stash, FONSfont* font, unsigned in
 		// In that case the glyph index 'g' is 0, and we'll proceed below and cache empty glyph.
 	}
 	scale = fons__tt_getPixelHeightScale(&renderFont->font, size);
-	fons__tt_buildGlyphBitmap(&renderFont->font, g, size, scale, &advance, &lsb, &x0, &y0, &x1, &y1);
+	fons__tt_buildGlyphBitmap(&renderFont->font, g, size, scale, &advance, &lsb, &x0, &y0, &x1, &y1, bitmapOption);
 	gw = x1-x0 + pad*2;
 	gh = y1-y0 + pad*2;
 
@@ -1905,7 +1938,7 @@ void fonsDeleteInternal(FONScontext* stash)
 	if (stash->fonts) free(stash->fonts);
 	if (stash->texData) free(stash->texData);
 	if (stash->scratch) free(stash->scratch);
-   fons__tt_done(stash);
+	fons__tt_done(stash);
 	free(stash);
 }
 
