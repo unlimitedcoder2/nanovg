@@ -398,7 +398,6 @@ static GLNVGtexture* glnvg__findTexture(GLNVGcontext* gl, int id)
 
 static int glnvg__deleteTexture(GLNVGcontext* gl, int id)
 {
-	int i;
 	GLNVGtexture*  tex;
 
 	tex = glnvg__findTexture( gl, id);
