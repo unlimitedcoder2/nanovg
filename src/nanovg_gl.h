@@ -361,7 +361,7 @@ static GLNVGtexture* glnvg__allocTexture(GLNVGcontext* gl)
 				break;
 			}
 		}
-		assert( 0 && "should not happen");
+		assert( i < gl->ntextures && "Hole must be found, this should not happen");
 	}
 	else
 	{
