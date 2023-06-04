@@ -670,10 +670,14 @@ void nvgTextMetrics(NVGcontext* ctx, float* ascender, float* descender, float* l
 // Words longer than the max width are slit at nearest character (i.e. no hyphenation).
 int nvgTextBreakLines(NVGcontext* ctx, const char* string, const char* end, float breakRowWidth, NVGtextRow* rows, int maxRows);
 
-// Get the FT_Face as a void * or stbtt_fontinfo * for the current fontFace.
-// Useful if you want to do more intricate font handling. If NULL is returned
-// you haven't setup the current font yet.
-void *nvgGetFontHandle(NVGcontext* ctx);
+// Get the FT_Face as a void * or stbtt_fontinfo * for the a font. If the font
+// is -1, the current font is used. This function can be useful, if you want to
+// do more intricate font handling. If NULL is returned you haven't set up the
+// font yet. Once you get the font handle, changes in font state like
+// nvgFontSize, nvgTextAlign and so forth will not affect the font (!), until
+// you call nvgGetFontHandle or any other font querying function like
+// nvgTextMetrics or nvgText.
+void *nvgGetFontHandle(NVGcontext* ctx, int font);
 
 //
 // Internal Render API
