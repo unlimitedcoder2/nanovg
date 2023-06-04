@@ -670,6 +670,11 @@ void nvgTextMetrics(NVGcontext* ctx, float* ascender, float* descender, float* l
 // Words longer than the max width are slit at nearest character (i.e. no hyphenation).
 int nvgTextBreakLines(NVGcontext* ctx, const char* string, const char* end, float breakRowWidth, NVGtextRow* rows, int maxRows);
 
+// Get the FT_Face as a void * or stbtt_fontinfo * for the current fontFace.
+// Useful if you want to do more intricate font handling. If NULL is returned
+// you haven't setup the current font yet.
+void *nvgGetFontHandle(NVGcontext* ctx);
+
 //
 // Internal Render API
 //

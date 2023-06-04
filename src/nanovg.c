@@ -3238,4 +3238,14 @@ void nvgTextMetrics(NVGcontext* ctx, float* ascender, float* descender, float* l
 	if (lineh != NULL)
 		*lineh *= invscale;
 }
+
+void *nvgGetFontHandle(NVGcontext* ctx)
+{
+   NVGstate* state = nvg__getState(ctx);
+
+   if (state->fontId == FONS_INVALID) return( NULL);
+
+   return( fonsGetFontHandle( ctx->fs, state->fontId));
+}
+
 // vim: ft=c nu noet ts=4

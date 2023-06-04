@@ -144,6 +144,9 @@ int fonsValidateTexture(FONScontext* s, int* dirty);
 // Draws the stash texture for debugging
 void fonsDrawDebug(FONScontext* s, float x, float y);
 
+// get either FT_Face or sttb struct
+void* fonsGetFontHandle(FONScontext* s, int fontId);
+
 #endif // FONTSTASH_H
 
 
@@ -640,6 +643,11 @@ void fons__tt_setGlyphRenderFlags(FONSttFontImpl *font, int flags)
 	font->ftGlyphRenderFlags = flags;
 }
 
+void* fons__tt_getFontHandle(FONSttFontImpl *font)
+{
+   return( (void *) font->font);
+}
+
 #else
 
 int fons__tt_init(FONScontext *context)
@@ -712,6 +720,11 @@ int fons__tt_getGlyphRenderFlags(FONSttFontImpl *font)
 
 void fons__tt_setGlyphRenderFlags(FONSttFontImpl *font, int flags)
 {
+}
+
+void* fons__tt_getFontHandle(FONSttFontImpl *font)
+{
+   return( &font->font);
 }
 
 #endif
@@ -2048,5 +2061,13 @@ int fonsResetAtlas(FONScontext* stash, int width, int height, int pixelsize)
 	return 1;
 }
 
+
+void* fonsGetFontHandle(FONScontext* stash, int fontId)
+{
+   if( fontId < 0 || fontId >= stash->nfonts)
+      return( NULL);
+
+   return( fons__tt_getFontHandle( &stash->fonts[fontId]->font));
+}
 
 #endif
