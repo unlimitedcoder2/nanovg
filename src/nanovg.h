@@ -50,9 +50,9 @@ struct NVGpaint {
 	NVGcolor innerColor;
 	NVGcolor outerColor;
 	int image;
-#ifdef NANOVG_CLEARTYPE
+//#ifdef NANOVG_CLEARTYPE
    int drawingFont;
-#endif
+//#endif
 };
 typedef struct NVGpaint NVGpaint;
 

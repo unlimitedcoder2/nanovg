@@ -516,7 +516,7 @@ static void fons__tt_renderGlyphRGBABitmapMono(FONSttFontImpl *font, unsigned ch
    }
 }
 
-
+#if 0
 static void fons__tt_renderGlyphBitmapGrayscale(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
                         float scaleX, float scaleY, int glyph)
 {
@@ -573,7 +573,7 @@ static void fons__tt_renderGlyphBitmapMono(FONSttFontImpl *font, unsigned char *
       output     += outStride;
    }
 }
-
+#endif
 
 
 void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
@@ -745,19 +745,6 @@ static void fons__tmpfree(void* ptr, void* up)
 
 #endif // STB_TRUETYPE_IMPLEMENTATION
 
-#ifdef FONS_USE_FREETYPE
-
-static FT_Library fons__tt_getFtLibrary(FONScontext* context)
-{
-	return(context->ftLibrary);
-}
-
-static void   fons__tt_setFtLibrary(FONScontext* context, FT_Library library)
-{
-	context->ftLibrary = library;
-}
-
-#endif
 
 // Copyright (c) 2008-2010 Bjoern Hoehrmann <bjoern@hoehrmann.de>
 // See http://bjoern.hoehrmann.de/utf-8/decoder/dfa/ for details.
