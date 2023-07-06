@@ -151,4 +151,8 @@ void nvgluDeleteFramebuffer(NVGLUframebuffer* fb)
 #endif
 }
 
+#ifdef NANOVG_GL_UTILS_EXTENSION_SOURCE
+# include NANOVG_GL_UTILS_EXTENSION_SOURCE
+#endif
+
 #endif // NANOVG_GL_IMPLEMENTATION

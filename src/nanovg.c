@@ -3251,4 +3251,8 @@ void *nvgGetFontHandle(NVGcontext* ctx, int fontId)
    return( fonsGetFontHandle( ctx->fs, fontId));
 }
 
+#ifdef NANOVG_EXTENSION_SOURCE
+# include NANOVG_EXTENSION_SOURCE
+#endif
+
 // vim: ft=c nu noet ts=4
