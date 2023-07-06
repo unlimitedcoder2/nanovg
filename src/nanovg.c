@@ -2944,4 +2944,9 @@ void nvgTextMetrics(NVGcontext* ctx, float* ascender, float* descender, float* l
 	if (lineh != NULL)
 		*lineh *= invscale;
 }
+
+#ifdef NANOVG_EXTENSION_SOURCE
+# include NANOVG_EXTENSION_SOURCE
+#endif
+
 // vim: ft=c nu noet ts=4

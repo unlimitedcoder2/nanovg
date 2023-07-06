@@ -1657,4 +1657,8 @@ GLuint nvglImageHandleGLES3(NVGcontext* ctx, int image)
 	return tex->tex;
 }
 
+#ifdef NANOVG_GL_EXTENSION_SOURCE
+# include NANOVG_GL_EXTENSION_SOURCE
+#endif
+
 #endif /* NANOVG_GL_IMPLEMENTATION */
