@@ -32,6 +32,10 @@ enum NVGcreateFlags {
 	NVG_STENCIL_STROKES	= 1<<1,
 	// Flag indicating that additional debug checks are done.
 	NVG_DEBUG 			= 1<<2,
+   // Create a path context, which just holds a path, that can then be used to set the path of
+   // another context. Only a limited amount of operations are possible with such a context
+   // like nvgMoveTo, nvgArc etc.
+   NVG_PATH_ONLY     = 1<<3
 };
 
 #if defined NANOVG_GL2_IMPLEMENTATION
@@ -1669,25 +1673,29 @@ NVGcontext* nvgCreateGLES3(int flags)
 	memset(gl, 0, sizeof(GLNVGcontext));
 
 	memset(&params, 0, sizeof(params));
-	params.renderCreate = glnvg__renderCreate;
-	params.renderCreateTexture = glnvg__renderCreateTexture;
-	params.renderDeleteTexture = glnvg__renderDeleteTexture;
-// @mulle-nanovg@ >>
-	params.renderDefineTexture = glnvg__renderDefineTexture;
-	params.renderForgetTexture = glnvg__renderForgetTexture;
-	params.renderGetTextureInfo = glnvg__renderGetTextureInfo;
-// @mulle-nanovg@ <<
-	params.renderGetTextureSize = glnvg__renderGetTextureSize;
-	params.renderUpdateTexture = glnvg__renderUpdateTexture;
-	params.renderViewport = glnvg__renderViewport;
-	params.renderCancel = glnvg__renderCancel;
-	params.renderFlush = glnvg__renderFlush;
-	params.renderFill = glnvg__renderFill;
-	params.renderStroke = glnvg__renderStroke;
-	params.renderTriangles = glnvg__renderTriangles;
-	params.renderDelete = glnvg__renderDelete;
+   if( ! (flags & NVG_PATH_ONLY))
+   {
+   	params.renderCreate = glnvg__renderCreate;
+   	params.renderCreateTexture = glnvg__renderCreateTexture;
+   	params.renderDeleteTexture = glnvg__renderDeleteTexture;
+   // @mulle-nanovg@ >>
+   	params.renderDefineTexture = glnvg__renderDefineTexture;
+   	params.renderForgetTexture = glnvg__renderForgetTexture;
+   	params.renderGetTextureInfo = glnvg__renderGetTextureInfo;
+   // @mulle-nanovg@ <<
+   	params.renderGetTextureSize = glnvg__renderGetTextureSize;
+   	params.renderUpdateTexture = glnvg__renderUpdateTexture;
+   	params.renderViewport = glnvg__renderViewport;
+   	params.renderCancel = glnvg__renderCancel;
+   	params.renderFlush = glnvg__renderFlush;
+   	params.renderFill = glnvg__renderFill;
+   	params.renderStroke = glnvg__renderStroke;
+   	params.renderTriangles = glnvg__renderTriangles;
+   	params.renderDelete = glnvg__renderDelete;
+   }
 	params.userPtr = gl;
 	params.edgeAntiAlias = flags & NVG_ANTIALIAS ? 1 : 0;
+   params.pathOnly      = flags & NVG_PATH_ONLY ? 1 : 0;
 
 	gl->flags = flags;
 

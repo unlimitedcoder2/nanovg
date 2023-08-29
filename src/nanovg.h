@@ -547,6 +547,15 @@ void nvgFill(NVGcontext* ctx);
 // Fills the current path with current stroke style.
 void nvgStroke(NVGcontext* ctx);
 
+// Call this on a NVG_PATH_ONLY context to create tesselation info. This is
+// only useful to execute on "path" before calling nvgCopyPath (see below).
+// If there is lots of tesselation generated pre-computing this can be a win
+void  nvgPrecompilePath(NVGcontext *ctx);
+
+// Reuse an existing path contained in another context, which is most likely
+// a NVG_PATH_ONLY context (but does not have to be). If path is NULL or same
+// as ctx, this is the same as calling nvgBeginPath
+void nvgCopyPath(NVGcontext* ctx, NVGcontext *path);
 
 //
 // Text
@@ -718,6 +727,9 @@ typedef struct NVGpath NVGpath;
 struct NVGparams {
 	void* userPtr;
 	int edgeAntiAlias;
+// @mulle-nanovg@ >>
+   int pathOnly;
+// @mulle-nanovg@ <<
 	int (*renderCreate)(void* uptr);
 	int (*renderCreateTexture)(void* uptr, int type, int w, int h, int imageFlags, const unsigned char* data);
 	int (*renderDeleteTexture)(void* uptr, int image);
