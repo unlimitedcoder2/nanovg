@@ -22,6 +22,7 @@
 #include <memory.h>
 #include <assert.h>
 
+
 #define NOT_AVAILABLE_IN_PATH_CONTEXT( ctx) \
    assert( ! ctx->params.pathOnly && \
            "Function is not available int a NVG_PATH_ONLY context")
@@ -54,10 +55,6 @@
 #define NVG_INIT_POINTS_SIZE 128
 #define NVG_INIT_PATHS_SIZE 16
 #define NVG_INIT_VERTS_SIZE 256
-
-#ifndef NVG_MAX_STATES
-#define NVG_MAX_STATES 32
-#endif
 
 #define NVG_KAPPA90 0.5522847493f	// Length proportional to radius of a cubic bezier handle for 90deg arcs.
 
@@ -137,8 +134,6 @@ struct NVGcontext {
 	int ccommands;
 	int ncommands;
 	float commandx, commandy;
-	NVGstate states[NVG_MAX_STATES];
-	int nstates;
 	NVGpathCache* cache;
 	float tessTol;
 	float distTol;
@@ -152,6 +147,8 @@ struct NVGcontext {
 	int strokeTriCount;
 	int textTriCount;
    int pathOnly;
+   int nstates;
+   NVGstate states[1]; // keep this at the bottom
 };
 
 static float nvg__sqrtf(float a) { return sqrtf(a); }
@@ -408,7 +405,8 @@ static NVGstate* nvg__getState(NVGcontext* ctx)
 NVGcontext* nvgCreateInternal(NVGparams* params)
 {
 	FONSparams fontParams;
-	NVGcontext* ctx = (NVGcontext*)malloc(sizeof(NVGcontext));
+   size_t extraBytes = (params->cStates - 1) * sizeof( NVGstate);
+	NVGcontext* ctx = (NVGcontext*)malloc(sizeof(NVGcontext) + extraBytes);
 	int i;
 	if (ctx == NULL) goto error;
 	memset(ctx, 0, sizeof(NVGcontext));
@@ -777,9 +775,9 @@ static void nvg__setPaintColor(NVGpaint* p, NVGcolor color)
 // State handling
 void nvgSave(NVGcontext* ctx)
 {
-	assert(ctx->nstates < NVG_MAX_STATES);
+	assert(ctx->nstates < ctx->params.cStates);
 
-	if (ctx->nstates >= NVG_MAX_STATES)
+	if (ctx->nstates >= ctx->params.cStates)
 		return;
 	if (ctx->nstates > 0)
 		memcpy(&ctx->states[ctx->nstates], &ctx->states[ctx->nstates-1], sizeof(NVGstate));

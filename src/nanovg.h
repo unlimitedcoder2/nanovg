@@ -728,6 +728,7 @@ struct NVGparams {
 	void* userPtr;
 	int edgeAntiAlias;
 // @mulle-nanovg@ >>
+   int cStates;
    int pathOnly;
 // @mulle-nanovg@ <<
 	int (*renderCreate)(void* uptr);

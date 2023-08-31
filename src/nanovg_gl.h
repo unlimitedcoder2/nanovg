@@ -22,6 +22,14 @@
 extern "C" {
 #endif
 
+#ifndef NVG_MIN_STATES
+# define NVG_MIN_STATES 1
+#endif
+
+#ifndef NVG_MAX_STATES
+# define NVG_MAX_STATES 32
+#endif
+
 // Create flags
 
 enum NVGcreateFlags {
@@ -34,7 +42,7 @@ enum NVGcreateFlags {
 	NVG_DEBUG 			= 1<<2,
    // Create a path context, which just holds a path, that can then be used to set the path of
    // another context. Only a limited amount of operations are possible with such a context
-   // like nvgMoveTo, nvgArc etc.
+   // like nvgMoveTo, nvgArc etc. You can not save/restore a context
    NVG_PATH_ONLY     = 1<<3
 };
 
@@ -1673,8 +1681,11 @@ NVGcontext* nvgCreateGLES3(int flags)
 	memset(gl, 0, sizeof(GLNVGcontext));
 
 	memset(&params, 0, sizeof(params));
+   params.cStates = NVG_MIN_STATES;  // NVG_PATH_ONLY default, to keep size down
+
    if( ! (flags & NVG_PATH_ONLY))
    {
+      params.cStates = NVG_MAX_STATES;
    	params.renderCreate = glnvg__renderCreate;
    	params.renderCreateTexture = glnvg__renderCreateTexture;
    	params.renderDeleteTexture = glnvg__renderDeleteTexture;
