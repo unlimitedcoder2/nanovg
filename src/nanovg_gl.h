@@ -1676,15 +1676,16 @@ NVGcontext* nvgCreateGLES3(int flags)
 {
 	NVGparams params;
 	NVGcontext* ctx = NULL;
-	GLNVGcontext* gl = (GLNVGcontext*)malloc(sizeof(GLNVGcontext));
-	if (gl == NULL) goto error;
-	memset(gl, 0, sizeof(GLNVGcontext));
 
 	memset(&params, 0, sizeof(params));
    params.cStates = NVG_MIN_STATES;  // NVG_PATH_ONLY default, to keep size down
 
    if( ! (flags & NVG_PATH_ONLY))
    {
+      GLNVGcontext* gl = (GLNVGcontext*)malloc(sizeof(GLNVGcontext));
+      if (gl == NULL) goto error;
+      memset(gl, 0, sizeof(GLNVGcontext));
+
       params.cStates = NVG_MAX_STATES;
    	params.renderCreate = glnvg__renderCreate;
    	params.renderCreateTexture = glnvg__renderCreateTexture;
@@ -1703,12 +1704,11 @@ NVGcontext* nvgCreateGLES3(int flags)
    	params.renderStroke = glnvg__renderStroke;
    	params.renderTriangles = glnvg__renderTriangles;
    	params.renderDelete = glnvg__renderDelete;
+      params.userPtr = gl;
+      gl->flags = flags;
    }
-	params.userPtr = gl;
 	params.edgeAntiAlias = flags & NVG_ANTIALIAS ? 1 : 0;
    params.pathOnly      = flags & NVG_PATH_ONLY ? 1 : 0;
-
-	gl->flags = flags;
 
 	ctx = nvgCreateInternal(&params);
 	if (ctx == NULL) goto error;
