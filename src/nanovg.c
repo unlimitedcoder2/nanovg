@@ -184,17 +184,14 @@ static NVGpathCache* nvg__allocPathCache(void)
 
 	c->points = (NVGpoint*)malloc(sizeof(NVGpoint)*NVG_INIT_POINTS_SIZE);
 	if (!c->points) goto error;
-	c->npoints = 0;
 	c->cpoints = NVG_INIT_POINTS_SIZE;
 
 	c->paths = (NVGpath*)malloc(sizeof(NVGpath)*NVG_INIT_PATHS_SIZE);
 	if (!c->paths) goto error;
-	c->npaths = 0;
 	c->cpaths = NVG_INIT_PATHS_SIZE;
 
 	c->verts = (NVGvertex*)malloc(sizeof(NVGvertex)*NVG_INIT_VERTS_SIZE);
 	if (!c->verts) goto error;
-	c->nverts = 0;
 	c->cverts = NVG_INIT_VERTS_SIZE;
 
 	return c;
@@ -298,12 +295,9 @@ NVGcontext* nvgCreateInternal(NVGparams* params)
 	memset(ctx, 0, sizeof(NVGcontext));
 
 	ctx->params = *params;
-	for (i = 0; i < NVG_MAX_FONTIMAGES; i++)
-		ctx->fontImages[i] = 0;
 
 	ctx->commands = (float*)malloc(sizeof(float)*NVG_INIT_COMMANDS_SIZE);
 	if (!ctx->commands) goto error;
-	ctx->ncommands = 0;
 	ctx->ccommands = NVG_INIT_COMMANDS_SIZE;
 
 	ctx->cache = nvg__allocPathCache();
@@ -321,18 +315,12 @@ NVGcontext* nvgCreateInternal(NVGparams* params)
 	fontParams.width = NVG_INIT_FONTIMAGE_SIZE;
 	fontParams.height = NVG_INIT_FONTIMAGE_SIZE;
 	fontParams.flags = FONS_ZERO_TOPLEFT;
-	fontParams.renderCreate = NULL;
-	fontParams.renderUpdate = NULL;
-	fontParams.renderDraw = NULL;
-	fontParams.renderDelete = NULL;
-	fontParams.userPtr = NULL;
 	ctx->fs = fonsCreateInternal(&fontParams);
 	if (ctx->fs == NULL) goto error;
 
 	// Create font texture
 	ctx->fontImages[0] = ctx->params.renderCreateTexture(ctx->params.userPtr, NVG_TEXTURE_ALPHA, fontParams.width, fontParams.height, 0, NULL);
 	if (ctx->fontImages[0] == 0) goto error;
-	ctx->fontImageIdx = 0;
 
 	return ctx;
 
@@ -620,7 +608,6 @@ static void nvg__setPaintColor(NVGpaint* p, NVGcolor color)
 {
 	memset(p, 0, sizeof(*p));
 	nvgTransformIdentity(p->xform);
-	p->radius = 0.0f;
 	p->feather = 1.0f;
 	p->innerColor = color;
 	p->outerColor = color;
@@ -664,11 +651,8 @@ void nvgReset(NVGcontext* ctx)
 	state->scissor.extent[1] = -1.0f;
 
 	state->fontSize = 16.0f;
-	state->letterSpacing = 0.0f;
 	state->lineHeight = 1.0f;
-	state->fontBlur = 0.0f;
 	state->textAlign = NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE;
-	state->fontId = 0;
 }
 
 // State setting
@@ -875,8 +859,6 @@ NVGpaint nvgLinearGradient(NVGcontext* ctx,
 
 	p.extent[0] = large;
 	p.extent[1] = large + d*0.5f;
-
-	p.radius = 0.0f;
 
 	p.feather = nvg__maxf(1.0f, d);
 
