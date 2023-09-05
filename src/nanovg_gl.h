@@ -43,7 +43,11 @@ enum NVGcreateFlags {
    // Create a path context, which just holds a path, that can then be used to set the path of
    // another context. Only a limited amount of operations are possible with such a context
    // like nvgMoveTo, nvgArc etc. You can not save/restore a context
-   NVG_PATH_ONLY     = 1<<3
+   NVG_PATH_ONLY     = 1<<3,
+   // Create a font context, which can only be used for text metrics and glyph positions
+   // another context. Only a limited amount of operations are possible with such a context
+   // Yoi can not set NVG_PATH_ONLY and NVG_FONT_ONLY
+   NVG_FONT_ONLY     = 1<<4
 };
 
 #if defined NANOVG_GL2_IMPLEMENTATION
@@ -1678,15 +1682,33 @@ NVGcontext* nvgCreateGLES3(int flags)
 	NVGcontext* ctx = NULL;
 
 	memset(&params, 0, sizeof(params));
-   params.cStates = NVG_MIN_STATES;  // NVG_PATH_ONLY default, to keep size down
 
-   if( ! (flags & NVG_PATH_ONLY))
+   switch( flags & (NVG_PATH_ONLY|NVG_FONT_ONLY))
+   {
+   case 0 : params.contextType = NVG_FULL_CONTEXT;
+            params.cStates     = NVG_MAX_STATES;
+            break;
+
+   case NVG_PATH_ONLY :
+            params.contextType = NVG_PATH_CONTEXT;
+            params.cStates     = NVG_MIN_STATES;
+            break;
+
+   case NVG_FONT_ONLY :
+            params.contextType = NVG_FONT_CONTEXT;
+            params.cStates     = NVG_MIN_STATES;
+            break;
+
+   default :
+      goto error;
+   }
+
+   if( params.contextType == NVG_FULL_CONTEXT)
    {
       GLNVGcontext* gl = (GLNVGcontext*)malloc(sizeof(GLNVGcontext));
       if (gl == NULL) goto error;
       memset(gl, 0, sizeof(GLNVGcontext));
 
-      params.cStates = NVG_MAX_STATES;
    	params.renderCreate = glnvg__renderCreate;
    	params.renderCreateTexture = glnvg__renderCreateTexture;
    	params.renderDeleteTexture = glnvg__renderDeleteTexture;
@@ -1708,7 +1730,6 @@ NVGcontext* nvgCreateGLES3(int flags)
       gl->flags = flags;
    }
 	params.edgeAntiAlias = flags & NVG_ANTIALIAS ? 1 : 0;
-   params.pathOnly      = flags & NVG_PATH_ONLY ? 1 : 0;
 
 	ctx = nvgCreateInternal(&params);
 	if (ctx == NULL) goto error;

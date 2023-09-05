@@ -56,6 +56,13 @@ struct NVGpaint {
 };
 typedef struct NVGpaint NVGpaint;
 
+enum NVGcontextType {
+   NVG_FULL_CONTEXT = 0,
+   NVG_PATH_CONTEXT = 1,
+   NVG_FONT_CONTEXT = 2
+};
+
+
 enum NVGwinding {
 	NVG_CCW = 1,			// Winding for solid shapes
 	NVG_CW = 2,				// Winding for holes
@@ -729,7 +736,7 @@ struct NVGparams {
 	int edgeAntiAlias;
 // @mulle-nanovg@ >>
    int cStates;
-   int pathOnly;
+   enum NVGcontextType   contextType;
 // @mulle-nanovg@ <<
 	int (*renderCreate)(void* uptr);
 	int (*renderCreateTexture)(void* uptr, int type, int w, int h, int imageFlags, const unsigned char* data);
