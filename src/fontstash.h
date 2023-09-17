@@ -60,7 +60,7 @@ enum FONSerrorCode {
 
 struct FONSparams {
 	int width, height;
-   int pixelsize;    // 1: standard   4: RGBA
+   int pixelsize;    // 1: standard   4: RGBA (cleartype)
    int bytewidth;    // premultiplied width with pixelsize
 	unsigned char flags;
 	void* userPtr;
@@ -162,7 +162,7 @@ void* fonsGetFontHandle(FONScontext* s, int fontId);
 #include <math.h>
 #include <assert.h>
 
-#ifdef NANOVG_CLEARTYPE
+#ifndef NANOVG_NO_CLEARTYPE
 # ifndef FT_CONFIG_OPTION_SUBPIXEL_RENDERING
 #  error You must use FreeType build with FT_CONFIG_OPTION_SUBPIXEL_RENDERING
 # endif
@@ -314,6 +314,7 @@ struct FONScontext
 	int nstates;
 	void (*handleError)(void* uptr, int error, int val);
 	void* errorUptr;
+   int useClearType;
 #ifdef FONS_USE_FREETYPE
 	FT_Library ftLibrary;
 #endif
@@ -326,10 +327,6 @@ int fons__tt_init(FONScontext *context)
 	FT_Error ftError;
 	FONS_NOTUSED(context);
 	ftError = FT_Init_FreeType(&context->ftLibrary);
-#ifdef NANOVG_CLEARTYPE
-   if( ftError == 0 )
-      ftError = FT_Library_SetLcdFilter(context->ftLibrary, FT_LCD_FILTER_DEFAULT);
-#endif
 	return ftError == 0;
 }
 
@@ -341,17 +338,31 @@ int fons__tt_done(FONScontext *context)
 	return ftError == 0;
 }
 
+
+#define GLYPH_RENDER_FLAGS (FT_LOAD_FORCE_AUTOHINT)
+
+
 int fons__tt_loadFont(FONScontext *context, FONSttFontImpl *font, unsigned char *data, int dataSize, int fontIndex)
 {
 	FT_Error ftError;
 	FONS_NOTUSED(context);
 
 	ftError = FT_New_Memory_Face(context->ftLibrary, (const FT_Byte*)data, dataSize, fontIndex, &font->font);
-#ifdef NANOVG_CLEARTYPE
-   font->ftGlyphRenderFlags = FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_LIGHT | FT_LOAD_TARGET_LCD;
-#else
-   font->ftGlyphRenderFlags = FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_LIGHT;
-#endif
+   if( ftError != 0)
+      return ftError == 0;
+
+   font->ftGlyphRenderFlags = GLYPH_RENDER_FLAGS;
+
+   // cleartype check
+   if( context->params.pixelsize == 4)
+   {
+      font->ftGlyphRenderFlags |= FT_LOAD_TARGET_LCD;
+      ftError = FT_Library_SetLcdFilter(context->ftLibrary, FT_LCD_FILTER_LIGHT);
+   }
+   else
+   {
+      font->ftGlyphRenderFlags |= FT_LOAD_TARGET_LIGHT;
+   }
 
 	return ftError == 0;
 }
@@ -396,21 +407,24 @@ int fons__tt_buildGlyphBitmap(FONSttFontImpl *font, int glyph, float size, float
 	*advance = (int)advFixed;
 	*lsb = (int)ftGlyph->metrics.horiBearingX;
 	*x0 = ftGlyph->bitmap_left;
-#ifdef NANOVG_CLEARTYPE
-   // If not too small for LCD format we get subpixel format
-   if( ftGlyph->bitmap.pixel_mode == 5)
-      *x1 = *x0 + ftGlyph->bitmap.width / 3; // correct for three subpixels
+
+   // cleartype code
+   if( (font->ftGlyphRenderFlags & FT_LOAD_TARGET_( 0xF)) == FT_LOAD_TARGET_LCD)
+   {
+      // If not too small for LCD format we get subpixel format
+      if( ftGlyph->bitmap.pixel_mode == 5)
+         *x1 = *x0 + ftGlyph->bitmap.width / 3; // correct for three subpixels
+      else
+         *x1 = *x0 + ftGlyph->bitmap.width;
+   }
    else
       *x1 = *x0 + ftGlyph->bitmap.width;
-#else
-   *x1 = *x0 + ftGlyph->bitmap.width;
-#endif
+
    *y0 = -ftGlyph->bitmap_top;
    *y1 = *y0 + ftGlyph->bitmap.rows;
 	return 1;
 }
 
-#ifdef NANOVG_CLEARTYPE
 
 // Pack 3 grayscale sub-pixel bytes into a single RGBA pixel.
 static inline uint32_t packCleartypeSubpixels( uint8_t* triple )
@@ -584,47 +598,42 @@ void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int
 {
    FT_GlyphSlot ftGlyph = font->font->glyph;
 
-   switch( ftGlyph->bitmap.pixel_mode)
+   // cleartype code
+   if( (font->ftGlyphRenderFlags & FT_LOAD_TARGET_( 0xF)) == FT_LOAD_TARGET_LCD)
    {
-      case FT_PIXEL_MODE_MONO :
-         fons__tt_renderGlyphRGBABitmapMono( font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
-         break;
+      switch( ftGlyph->bitmap.pixel_mode)
+      {
+         case FT_PIXEL_MODE_MONO :
+            fons__tt_renderGlyphRGBABitmapMono( font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
+            break;
 
-      case FT_PIXEL_MODE_GRAY:
-         fons__tt_renderGlyphRGBABitmapGrayscale( font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
-         break;
+         case FT_PIXEL_MODE_GRAY:
+            fons__tt_renderGlyphRGBABitmapGrayscale( font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
+            break;
 
-      case FT_PIXEL_MODE_LCD :
-         fons__tt_renderGlyphRGBABitmapLCD( font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
-         break;
+         case FT_PIXEL_MODE_LCD :
+            fons__tt_renderGlyphRGBABitmapLCD( font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
+            break;
 
-      default:
-         abort();
+         default:
+            abort();
+      }
+   }
+   else
+   {
+      int ftGlyphOffset = 0;
+      unsigned int x, y;
+
+      assert( ftGlyph->bitmap.pixel_mode == FT_PIXEL_MODE_GRAY);
+
+      for ( y = 0; y < ftGlyph->bitmap.rows; y++ ) {
+         for ( x = 0; x < ftGlyph->bitmap.width; x++ ) {
+            output[(y * outStride) + x] = ftGlyph->bitmap.buffer[ftGlyphOffset++];
+         }
+      }
    }
 }
 
-#else
-
-
-void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
-								float scaleX, float scaleY, int glyph)
-{
-	FT_GlyphSlot ftGlyph = font->font->glyph;
-	int ftGlyphOffset = 0;
-	unsigned int x, y;
-	FONS_NOTUSED(outWidth);
-	FONS_NOTUSED(outHeight);
-	FONS_NOTUSED(scaleX);
-	FONS_NOTUSED(scaleY);
-	FONS_NOTUSED(glyph);	// glyph has already been loaded by fons__tt_buildGlyphBitmap
-
-	for ( y = 0; y < ftGlyph->bitmap.rows; y++ ) {
-		for ( x = 0; x < ftGlyph->bitmap.width; x++ ) {
-			output[(y * outStride) + x] = ftGlyph->bitmap.buffer[ftGlyphOffset++];
-		}
-	}
-}
-#endif
 
 int fons__tt_getGlyphKernAdvance(FONSttFontImpl *font, int glyph1, int glyph2)
 {

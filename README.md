@@ -1,6 +1,28 @@
+mulle NanovG branch
+===================
+
+This branch has a lot of significant changes to the original project,
+yet currently its still mostly mergeable with the original:
+
+* low level access to TrueType fonts with `nvgGetFontHandle`
+* low level texture handling with `nvgCreateImageTexture` and `nvgImageTextureInfo` and `nvgForgetImageTexture`
+* more control over scissors with `nvgGetScissor` and `nvgSetScissor`
+* added functions `nvgChangeFrame` and `nvgFlushFrame`, useful when mixing in FBO code
+* there are now three different `NVGcontext` types. Whereas `NVG_FULL_CONTEXT` retains full compatibility, `NVG_PATH_CONTEXT` and `NVG_FONT_CONTEXT` do not need an OpenGL context, and `NVG_PATH_CONTEXT` can't additionally deal with fonts
+* for `NVG_PATH_CONTEXT` you can now "precompile" your tesselation with `NVG_PATH_CONTEXT` and copy it to a `NVG_FULL_CONTEXT with `nvgCopyPath`
+* `struct NVGglyphPosition` has now `miny` and `maxx` fields
+* new function `nvgTextVisualBounds` more accurately determines "black ink" space
+* added function `nvgBezierTessellation` to support the merged AFD tesselation code from [#328](https://github.com/memononen/nanovg/issues/328)
+* added ClearType support from @Const-me (see below), with functions `nvgClearType`, `nvgTextColor`, `nvgTextBackgroundColor`
+* added a scheme to extend nanovg through #include to get access to private functions
+* improved texture management code [#656](https://github.com/memononen/nanovg/pull/656)
+
+---
+
 This is the cleartype branch. It backports the ClearType code from
 [@Const-me](https://github.com/Const-me/nanovg) to C. Compile this with
 `-DNANOVG_CLEARTYPE` to get the new feature.
+
 
 #### Screenshot
 

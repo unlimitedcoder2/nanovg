@@ -50,9 +50,7 @@ struct NVGpaint {
 	NVGcolor innerColor;
 	NVGcolor outerColor;
 	int image;
-//#ifdef NANOVG_CLEARTYPE
-   int drawingFont;
-//#endif
+   int clearType;
 };
 typedef struct NVGpaint NVGpaint;
 
@@ -147,12 +145,15 @@ struct NVGtextRow {
 typedef struct NVGtextRow NVGtextRow;
 
 enum NVGimageFlags {
-    NVG_IMAGE_GENERATE_MIPMAPS	= 1<<0,     // Generate mipmaps during creation of the image.
+   NVG_IMAGE_GENERATE_MIPMAPS	= 1<<0,     // Generate mipmaps during creation of the image.
 	NVG_IMAGE_REPEATX			= 1<<1,		// Repeat image in X direction.
 	NVG_IMAGE_REPEATY			= 1<<2,		// Repeat image in Y direction.
 	NVG_IMAGE_FLIPY				= 1<<3,		// Flips (inverses) image in Y direction when rendered.
 	NVG_IMAGE_PREMULTIPLIED		= 1<<4,		// Image data has premultiplied alpha.
 	NVG_IMAGE_NEAREST			= 1<<5,		// Image interpolation is Nearest instead Linear
+   NVG_IMAGE_MSAA          = 1<<6,     // only usable with nvgluCreateFramebuffer
+   NVG_IMAGE_RBO_LESS      = 1<<7      // convenience for framebuffer creation
+   // NVG_IMAGE_NODELETE 1 <<16 (defined elsewhere)
 };
 
 enum NVGtess {
@@ -274,8 +275,20 @@ void nvgStrokePaint(NVGcontext* ctx, NVGpaint paint);
 // Sets current fill style to a solid color.
 void nvgFillColor(NVGcontext* ctx, NVGcolor color);
 
-// use this to support cleartype for font drawing instead of fill
-void nvgTextColor( NVGcontext* ctx, NVGcolor foreground, NVGcolor background );
+// @mulle-nanovg@ >
+// Sets whether to use cleartype, default disabled
+void nvgClearType(NVGcontext* ctx, int enabled);
+
+// this is the same as nvgFillColor, but use it for text fills, this
+// resets the nvgTextBackgroundColor to white or black depending on the
+// sum of the color values
+void nvgTextColor( NVGcontext* ctx, NVGcolor color);
+
+// use this to support cleartype and provide the proper background color
+// (hint: cleartype only looks good for known monochromatic backgrounds)
+// must be set after nvgTextColor
+void nvgTextBackgroundColor( NVGcontext* ctx, NVGcolor color);
+// @mulle-nanovg@ <
 
 // Sets current fill style to a paint, which can be a one of the gradients or a pattern.
 void nvgFillPaint(NVGcontext* ctx, NVGpaint paint);
@@ -735,6 +748,7 @@ struct NVGparams {
 	void* userPtr;
 	int edgeAntiAlias;
 // @mulle-nanovg@ >>
+   int clearType;
    int cStates;
    enum NVGcontextType   contextType;
 // @mulle-nanovg@ <<
@@ -754,6 +768,7 @@ struct NVGparams {
 	int (*renderDefineTexture)(void* uptr, int w, int h, int type, int flags, void *texture);
    int (*renderForgetTexture)(void* uptr, int image);
 	int (*renderGetTextureInfo)(void* uptr, int image, int *type, int *flags, void **texture);
+   int (*renderValidatePaintTexture)(void* uptr, int image);
 // @mulle-nanovg@ <<
 };
 typedef struct NVGparams NVGparams;

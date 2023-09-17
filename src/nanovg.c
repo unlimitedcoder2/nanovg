@@ -68,11 +68,8 @@
 
 #define NVG_COUNTOF(arr) (sizeof(arr) / sizeof(0[arr]))
 
-#ifdef NANOVG_CLEARTYPE
-#define NVG_FONT_TEXTURE   NVG_TEXTURE_RGBA
-#else
-#define NVG_FONT_TEXTURE   NVG_TEXTURE_ALPHA
-#endif
+#define NVG_CLEARTYPE_FONT_TEXTURE   NVG_TEXTURE_RGBA
+#define NVG_FONT_TEXTURE             NVG_TEXTURE_ALPHA
 
 
 enum NVGcommands {
@@ -108,6 +105,7 @@ struct NVGstate {
 	float letterSpacing;
 	float lineHeight;
 	float fontBlur;
+   int clearType;
 	int textAlign;
 	int fontId;
 };
@@ -136,6 +134,13 @@ struct NVGpathCache {
 };
 typedef struct NVGpathCache NVGpathCache;
 
+struct NVGfontContext {
+   struct FONScontext* fs;
+   int fontImages[NVG_MAX_FONTIMAGES];
+   int fontImageIdx;
+};
+typedef struct NVGfontContext NVGfontContext;
+
 struct NVGcontext {
 	NVGparams params;
 	float* commands;
@@ -143,13 +148,11 @@ struct NVGcontext {
 	int ncommands;
 	float commandx, commandy;
 	NVGpathCache* cache;
+   NVGfontContext  fontContexts[ 2]; // 0: gray 1: cleartype
 	float tessTol;
 	float distTol;
 	float fringeWidth;
 	float devicePxRatio;
-	struct FONScontext* fs;
-	int fontImages[NVG_MAX_FONTIMAGES];
-	int fontImageIdx;
 	int drawCallCount;
 	int fillTriCount;
 	int strokeTriCount;
@@ -415,6 +418,10 @@ NVGcontext* nvgCreateInternal(NVGparams* params)
 	FONSparams fontParams;
    size_t extraBytes = (params->cStates - 1) * sizeof( NVGstate);
 	NVGcontext* ctx = (NVGcontext*)malloc(sizeof(NVGcontext) + extraBytes);
+   int i;
+   int fontImage;
+   struct NVGfontContext  *fctx;
+
 	if (ctx == NULL) goto error;
 	memset(ctx, 0, sizeof(NVGcontext));
 
@@ -440,31 +447,43 @@ NVGcontext* nvgCreateInternal(NVGparams* params)
    if( ctx->params.contextType == NVG_PATH_CONTEXT)
       return( ctx);
 
+   memset(&fontParams, 0, sizeof(fontParams));
+   fontParams.width  = NVG_INIT_FONTIMAGE_SIZE;
+   fontParams.height = NVG_INIT_FONTIMAGE_SIZE;
+
+   // only in full context
+   if( ctx->params.contextType == NVG_FULL_CONTEXT)
+      if (ctx->params.renderCreate(ctx->params.userPtr) == 0) goto error;
+
 	// Init font rendering
-	memset(&fontParams, 0, sizeof(fontParams));
-	fontParams.width = NVG_INIT_FONTIMAGE_SIZE;
-	fontParams.height = NVG_INIT_FONTIMAGE_SIZE;
-#ifdef NANOVG_CLEARTYPE
-   fontParams.pixelsize = 4;
-#else
-   fontParams.pixelsize = 1;
-#endif
-   fontParams.bytewidth = fontParams.pixelsize * fontParams.height;
+   for( i = 0; i < (params->clearType ? 2 : 1); i++)
+   {
+      fctx = &ctx->fontContexts[ i];
 
-	fontParams.flags = FONS_ZERO_TOPLEFT;
+      fontParams.pixelsize = i ? 4 : 1;
+      fontParams.bytewidth = fontParams.pixelsize * fontParams.width;
 
-	ctx->fs = fonsCreateInternal(&fontParams);
-	if (ctx->fs == NULL) goto error;
+   	fontParams.flags = FONS_ZERO_TOPLEFT;
 
-   if( ctx->params.contextType == NVG_FONT_CONTEXT)
-      return( ctx);
+   	fctx->fs = fonsCreateInternal(&fontParams);
+   	if (fctx->fs == NULL) goto error;
 
-   if (ctx->params.renderCreate(ctx->params.userPtr) == 0) goto error;
+      // we have no cleartype in font context
+      if( ctx->params.contextType == NVG_FONT_CONTEXT)
+         break;
 
-	// Create font texture
-	ctx->fontImages[0] = ctx->params.renderCreateTexture(ctx->params.userPtr, NVG_FONT_TEXTURE, fontParams.width, fontParams.height, 0, NULL);
-	if (ctx->fontImages[0] == 0) goto error;
-	ctx->fontImageIdx = 0;
+   	// Create font texture
+      fontImage = ctx->params.renderCreateTexture(ctx->params.userPtr,
+                                                  i
+                                                  ? NVG_CLEARTYPE_FONT_TEXTURE
+                                                  : NVG_FONT_TEXTURE,
+                                                  fontParams.width,
+                                                  fontParams.height,
+                                                  0,
+                                                  NULL);
+      fctx->fontImages[0] = fontImage;
+   	if (fontImage == 0) goto error;
+   }
 
 	return ctx;
 
@@ -478,22 +497,38 @@ NVGparams* nvgInternalParams(NVGcontext* ctx)
     return &ctx->params;
 }
 
+static void  nvg__deleteFontContext( NVGcontext* ctx, int i)
+{
+   NVGfontContext  *fctx;
+   int  j;
+   NVGstate* state = nvg__getState(ctx);
+
+   assert( i >= 0 && i < 2);
+
+   fctx = &ctx->fontContexts[ i];
+
+   if (fctx->fs)
+      fonsDeleteInternal(fctx->fs);
+
+   for (j = 0; j < NVG_MAX_FONTIMAGES; j++) {
+      if (fctx->fontImages[j] != 0) {
+         nvgDeleteImage(ctx, fctx->fontImages[j]);
+      }
+   }
+
+   memset( fctx, 0, sizeof( *fctx));
+   state->clearType = 0;
+}
+
+
 void nvgDeleteInternal(NVGcontext* ctx)
 {
-	int i;
 	if (ctx == NULL) return;
 	if (ctx->commands != NULL) free(ctx->commands);
 	if (ctx->cache != NULL) nvg__deletePathCache(ctx->cache);
 
-	if (ctx->fs)
-		fonsDeleteInternal(ctx->fs);
-
-	for (i = 0; i < NVG_MAX_FONTIMAGES; i++) {
-		if (ctx->fontImages[i] != 0) {
-			nvgDeleteImage(ctx, ctx->fontImages[i]);
-			ctx->fontImages[i] = 0;
-		}
-	}
+   nvg__deleteFontContext( ctx, 1);
+   nvg__deleteFontContext( ctx, 0);
 
 	if (ctx->params.renderDelete != NULL)
 		ctx->params.renderDelete(ctx->params.userPtr);
@@ -558,34 +593,43 @@ void nvgFlushFrame(NVGcontext* ctx)
 
 void nvgEndFrame(NVGcontext* ctx)
 {
+   int  k;
+   NVGfontContext  *fctx;
+
    NOT_AVAILABLE_IN_FONT_CONTEXT( ctx);
    NOT_AVAILABLE_IN_PATH_CONTEXT( ctx);
 	ctx->params.renderFlush(ctx->params.userPtr);
-	if (ctx->fontImageIdx != 0) {
-		int fontImage = ctx->fontImages[ctx->fontImageIdx];
-		ctx->fontImages[ctx->fontImageIdx] = 0;
-		int i, j, iw, ih;
-		// delete images that smaller than current one
-		if (fontImage == 0)
-			return;
-		nvgImageSize(ctx, fontImage, &iw, &ih);
-		for (i = j = 0; i < ctx->fontImageIdx; i++) {
-			if (ctx->fontImages[i] != 0) {
-				int nw, nh;
-				int image = ctx->fontImages[i];
-				ctx->fontImages[i] = 0;
-				nvgImageSize(ctx, image, &nw, &nh);
-				if (nw < iw || nh < ih)
-					nvgDeleteImage(ctx, image);
-				else
-					ctx->fontImages[j++] = image;
-			}
-		}
-		// make current font image to first
-		ctx->fontImages[j] = ctx->fontImages[0];
-		ctx->fontImages[0] = fontImage;
-		ctx->fontImageIdx = 0;
-	}
+
+   for( k = 0; k < 2; k++)
+   {
+      fctx = &ctx->fontContexts[ k];
+   	if (fctx->fontImageIdx != 0) {
+   		int fontImage = fctx->fontImages[fctx->fontImageIdx];
+   		fctx->fontImages[fctx->fontImageIdx] = 0;
+   		int i, j, iw, ih;
+   		// delete images that smaller than current one
+   		if (fontImage == 0)
+   			continue;
+
+   		nvgImageSize(ctx, fontImage, &iw, &ih);
+   		for (i = j = 0; i < fctx->fontImageIdx; i++) {
+   			if (fctx->fontImages[i] != 0) {
+   				int nw, nh;
+   				int image = fctx->fontImages[i];
+   				fctx->fontImages[i] = 0;
+   				nvgImageSize(ctx, image, &nw, &nh);
+   				if (nw < iw || nh < ih)
+   					nvgDeleteImage(ctx, image);
+   				else
+   					fctx->fontImages[j++] = image;
+   			}
+   		}
+   		// make current font image to first
+   		fctx->fontImages[j] = fctx->fontImages[0];
+   		fctx->fontImages[0] = fontImage;
+   		fctx->fontImageIdx = 0;
+   	}
+   }
 }
 
 NVGcolor nvgRGB(unsigned char r, unsigned char g, unsigned char b)
@@ -815,16 +859,12 @@ void nvgReset(NVGcontext* ctx)
    nvgTransformIdentity(state->xform);
    state->tess = NVG_TESS_SUBDIVISION;
    state->shapeAntiAlias = 1;
-
    if( ctx->params.contextType == NVG_PATH_CONTEXT)
       return;
 
    state->fontSize = 16.0f;
-   state->letterSpacing = 0.0f;
    state->lineHeight = 1.0f;
-   state->fontBlur = 0.0f;
    state->textAlign = NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE;
-   state->fontId = 0;
 
    if( ctx->params.contextType == NVG_FONT_CONTEXT)
       return;
@@ -1009,16 +1049,48 @@ void nvgFillColor(NVGcontext* ctx, NVGcolor color)
 	nvg__setPaintColor(&state->fill, color);
 }
 
-void nvgTextColor( NVGcontext* ctx, NVGcolor foreground, NVGcolor background )
+
+// State setting, a FONT_CONTEXT does not have cleartype support.
+//
+void nvgClearType(NVGcontext* ctx, int enabled)
+{
+   NOT_AVAILABLE_IN_FONT_CONTEXT( ctx);
+   NOT_AVAILABLE_IN_PATH_CONTEXT( ctx);
+
+   assert( ! enabled || ctx->params.clearType);
+
+   NVGstate* state = nvg__getState(ctx);
+   // only enable, if successfully initted otherwise keep as is (0)
+   if( ctx->fontContexts[ 1].fs)
+      state->clearType = enabled ? 1 : 0; // need it as index later
+}
+
+
+void nvgTextColor( NVGcontext* ctx, NVGcolor color)
 {
    NOT_AVAILABLE_IN_FONT_CONTEXT( ctx);
    NOT_AVAILABLE_IN_PATH_CONTEXT( ctx);
 
    NVGstate* state = nvg__getState( ctx );
-   nvg__setPaintColor( &state->fill, foreground );
-#ifdef NANOVG_CLEARTYPE
-   state->fill.outerColor = background;
-#endif
+   nvg__setPaintColor( &state->fill, color);
+
+   if( state->clearType)
+   {
+      if( (color.r + color.g + color.b) * color.a > 1.5f)
+         state->fill.outerColor = nvgRGBAf( 0.0f, 0.0f, 0.0f, 1.0f);
+      else
+         state->fill.outerColor = nvgRGBAf( 1.0f, 1.0f, 1.0f, 1.0f);
+   }
+}
+
+
+void nvgTextBackgroundColor( NVGcontext* ctx, NVGcolor color)
+{
+   NOT_AVAILABLE_IN_FONT_CONTEXT( ctx);
+   NOT_AVAILABLE_IN_PATH_CONTEXT( ctx);
+
+   NVGstate* state = nvg__getState( ctx );
+   state->fill.outerColor = color;
 }
 
 void nvgFillPaint(NVGcontext* ctx, NVGpaint paint)
@@ -1245,6 +1317,9 @@ NVGpaint nvgImagePattern(NVGcontext* ctx,
 	NVGpaint p;
 	NVG_NOTUSED(ctx);
 	memset(&p, 0, sizeof(p));
+
+   // ensure that image is valid as paint pattern (not MSAA)
+   assert( ctx->params.renderValidatePaintTexture(ctx->params.userPtr, image));
 
 	nvgTransformRotate(p.xform, angle);
 	p.xform[4] = cx;
@@ -2843,65 +2918,139 @@ void nvgStroke(NVGcontext* ctx)
 	}
 }
 
+
 // Add fonts
+// Font loading is done into both clearType and regular font rendering
+// if available, because otherwise I feel its too much work for the user
+// Since we add and remove in unison, the fontIndex should remain stable
+//
+static int nvg__createFont(NVGcontext* ctx, const char* name, const char* filename, const int fontIndex)
+{
+   int  handle[ 2];
+
+   handle[ 0] = fonsAddFont(ctx->fontContexts[ 0].fs, name, filename, fontIndex);
+   if( handle[ 0] == FONS_INVALID)
+      return( -1);
+
+   if( ! ctx->fontContexts[ 1].fs)
+      return( handle[ 0]);
+
+   handle[ 1] = fonsAddFont(ctx->fontContexts[ 1].fs, name, filename, fontIndex);
+   if( handle[ 1] != handle[ 0])
+   {
+      // if the font handles differ, our assumptions fails, so we just
+      // use gray for everything
+      nvg__deleteFontContext( ctx, 1);
+      fprintf( stderr, "Font \"%s\" (%s) forced degradation to non-ClearType\n",
+                  name ? name : "???",
+                  filename ? filename  : "");
+   }
+   return( handle[ 0]);
+}
+
+
 int nvgCreateFont(NVGcontext* ctx, const char* name, const char* filename)
 {
    NOT_AVAILABLE_IN_PATH_CONTEXT( ctx);
 
-	return fonsAddFont(ctx->fs, name, filename, 0);
+   return( nvg__createFont( ctx, name, filename, 0));
 }
+
 
 int nvgCreateFontAtIndex(NVGcontext* ctx, const char* name, const char* filename, const int fontIndex)
 {
    NOT_AVAILABLE_IN_PATH_CONTEXT( ctx);
 
-	return fonsAddFont(ctx->fs, name, filename, fontIndex);
+   return( nvg__createFont( ctx, name, filename, fontIndex));
 }
+
+
+static int nvg__createFontMem(NVGcontext* ctx, const char* name, unsigned char* data, int ndata, int freeData, int fontIndex)
+{
+   int  handle[ 2];
+
+   handle[ 0] = fonsAddFontMem(ctx->fontContexts[ 0].fs, name, data, ndata, freeData, fontIndex);
+   if( handle[ 0] == FONS_INVALID)
+      return( -1);
+
+   if( ! ctx->fontContexts[ 1].fs)
+      return( handle[ 0]);
+
+   handle[ 1] = fonsAddFontMem(ctx->fontContexts[ 1].fs, name, data, ndata, freeData, fontIndex);
+   if( handle[ 1] != handle[ 0])
+   {
+      // if the font handles differ, our assumptions fails, so we just
+      // use gray
+      assert( ! "can't load font as LCD for some reason (memory?)");
+      nvg__deleteFontContext( ctx, 1);
+   }
+   return( handle[ 0]);
+}
+
 
 int nvgCreateFontMem(NVGcontext* ctx, const char* name, unsigned char* data, int ndata, int freeData)
 {
    NOT_AVAILABLE_IN_PATH_CONTEXT( ctx);
 
-	return fonsAddFontMem(ctx->fs, name, data, ndata, freeData, 0);
+   return( nvg__createFontMem( ctx, name, data, ndata, freeData, 0));
 }
 
 int nvgCreateFontMemAtIndex(NVGcontext* ctx, const char* name, unsigned char* data, int ndata, int freeData, const int fontIndex)
 {
    NOT_AVAILABLE_IN_PATH_CONTEXT( ctx);
 
-	return fonsAddFontMem(ctx->fs, name, data, ndata, freeData, fontIndex);
+   return( nvg__createFontMem( ctx, name, data, ndata, freeData, fontIndex));
 }
+
 
 int nvgFindFont(NVGcontext* ctx, const char* name)
 {
    NOT_AVAILABLE_IN_PATH_CONTEXT( ctx);
 
-	if (name == NULL) return -1;
-	return fonsGetFontByName(ctx->fs, name);
+   if (name == NULL) return -1;
+
+   return( fonsGetFontByName(ctx->fontContexts[ 0].fs, name));
 }
 
 
 int nvgAddFallbackFontId(NVGcontext* ctx, int baseFont, int fallbackFont)
 {
+   int  i;
+   int  rc;
+
    NOT_AVAILABLE_IN_PATH_CONTEXT( ctx);
 
 	if(baseFont == -1 || fallbackFont == -1) return 0;
-	return fonsAddFallbackFont(ctx->fs, baseFont, fallbackFont);
+
+   rc = 0;
+   for( i = 0; i < 2; i++)
+      if( ctx->fontContexts[ i].fs)
+        rc |= fonsAddFallbackFont(ctx->fontContexts[ i].fs, baseFont, fallbackFont);
+   return( rc);
 }
+
 
 int nvgAddFallbackFont(NVGcontext* ctx, const char* baseFont, const char* fallbackFont)
 {
    NOT_AVAILABLE_IN_PATH_CONTEXT( ctx);
 
-	return nvgAddFallbackFontId(ctx, nvgFindFont(ctx, baseFont), nvgFindFont(ctx, fallbackFont));
+   return( nvgAddFallbackFontId(ctx, nvgFindFont(ctx, baseFont), nvgFindFont(ctx, fallbackFont)));
 }
+
 
 void nvgResetFallbackFontsId(NVGcontext* ctx, int baseFont)
 {
+   int  i;
+
    NOT_AVAILABLE_IN_PATH_CONTEXT( ctx);
 
-	fonsResetFallbackFont(ctx->fs, baseFont);
+   if(baseFont == -1) return;
+
+   for( i = 0; i < 2; i++)
+      if( ctx->fontContexts[ i].fs)
+        fonsResetFallbackFont( ctx->fontContexts[ i].fs, baseFont);
 }
+
 
 void nvgResetFallbackFonts(NVGcontext* ctx, const char* baseFont)
 {
@@ -2919,15 +3068,13 @@ void nvgFontSize(NVGcontext* ctx, float size)
 	state->fontSize = size;
 }
 
+// not used by cleartype
 void nvgFontBlur(NVGcontext* ctx, float blur)
 {
    NOT_AVAILABLE_IN_PATH_CONTEXT( ctx);
-
-#ifndef NANOVG_CLEARTYPE
 	NVGstate* state = nvg__getState(ctx);
 
 	state->fontBlur = blur;
-#endif
 }
 
 void nvgTextLetterSpacing(NVGcontext* ctx, float spacing)
@@ -2967,7 +3114,7 @@ void nvgFontFace(NVGcontext* ctx, const char* font)
    NOT_AVAILABLE_IN_PATH_CONTEXT( ctx);
 
 	NVGstate* state = nvg__getState(ctx);
-	state->fontId = fonsGetFontByName(ctx->fs, font);
+	state->fontId = fonsGetFontByName(ctx->fontContexts[ state->clearType].fs, font);
 }
 
 static float nvg__quantize(float a, float d)
@@ -2983,15 +3130,18 @@ static float nvg__getFontScale(NVGstate* state)
 static void nvg__flushTextTexture(NVGcontext* ctx)
 {
 	int dirty[4];
+   NVGstate* state = nvg__getState(ctx);
+   NVGfontContext *fctx;
 
    assert( ctx->params.contextType == NVG_FULL_CONTEXT);
 
-	if (fonsValidateTexture(ctx->fs, dirty)) {
-		int fontImage = ctx->fontImages[ctx->fontImageIdx];
+   fctx = &ctx->fontContexts[ state->clearType];
+	if (fonsValidateTexture(fctx->fs, dirty)) {
+		int fontImage = fctx->fontImages[fctx->fontImageIdx];
 		// Update texture
 		if (fontImage != 0) {
 			int iw, ih;
-			const unsigned char* data = fonsGetTextureData(ctx->fs, &iw, &ih);
+			const unsigned char* data = fonsGetTextureData( fctx->fs, &iw, &ih);
 			int x = dirty[0];
 			int y = dirty[1];
 			int w = dirty[2] - dirty[0];
@@ -3004,26 +3154,45 @@ static void nvg__flushTextTexture(NVGcontext* ctx)
 static int nvg__allocTextAtlas(NVGcontext* ctx)
 {
    assert( ctx->params.contextType == NVG_FULL_CONTEXT);
+   int iw, ih;
+   NVGstate* state = nvg__getState(ctx);
+   NVGfontContext *fctx;
+   int fontImage;
 
-	int iw, ih;
 	nvg__flushTextTexture(ctx);
-	if (ctx->fontImageIdx >= NVG_MAX_FONTIMAGES-1)
+
+   fctx = &ctx->fontContexts[ state->clearType];
+	if (fctx->fontImageIdx >= NVG_MAX_FONTIMAGES-1)
+   {
+#ifdef DEBUG
+      abort();
+#endif
 		return 0;
+   }
+
 	// if next fontImage already have a texture
-	if (ctx->fontImages[ctx->fontImageIdx+1] != 0)
-		nvgImageSize(ctx, ctx->fontImages[ctx->fontImageIdx+1], &iw, &ih);
+	if (fctx->fontImages[fctx->fontImageIdx+1] != 0)
+		nvgImageSize(ctx, fctx->fontImages[fctx->fontImageIdx+1], &iw, &ih);
 	else { // calculate the new font image size and create it.
-		nvgImageSize(ctx, ctx->fontImages[ctx->fontImageIdx], &iw, &ih);
+		nvgImageSize(ctx, fctx->fontImages[fctx->fontImageIdx], &iw, &ih);
 		if (iw > ih)
 			ih *= 2;
 		else
 			iw *= 2;
 		if (iw > NVG_MAX_FONTIMAGE_SIZE || ih > NVG_MAX_FONTIMAGE_SIZE)
 			iw = ih = NVG_MAX_FONTIMAGE_SIZE;
-		ctx->fontImages[ctx->fontImageIdx+1] = ctx->params.renderCreateTexture(ctx->params.userPtr, NVG_FONT_TEXTURE, iw, ih, 0, NULL);
+      fontImage = ctx->params.renderCreateTexture(ctx->params.userPtr,
+                                                  state->clearType
+                                                  ? NVG_CLEARTYPE_FONT_TEXTURE
+                                                  : NVG_FONT_TEXTURE,
+                                                  iw,
+                                                  ih,
+                                                  0,
+                                                  NULL);
+		fctx->fontImages[fctx->fontImageIdx+1] = fontImage;
 	}
-	++ctx->fontImageIdx;
-	fonsResetAtlas(ctx->fs, iw, ih, NVG_FONT_TEXTURE == NVG_TEXTURE_ALPHA ? 1 : 4);
+	++fctx->fontImageIdx;
+	fonsResetAtlas(fctx->fs, iw, ih, state->clearType ? 4 : 1);
 	return 1;
 }
 
@@ -3031,21 +3200,19 @@ static void nvg__renderText(NVGcontext* ctx, NVGvertex* verts, int nverts)
 {
 	NVGstate* state = nvg__getState(ctx);
 	NVGpaint paint = state->fill;
+   NVGfontContext *fctx;
 
    assert( ctx->params.contextType == NVG_FULL_CONTEXT);
 
+   fctx = &ctx->fontContexts[ state->clearType];
 	// Render triangles.
-	paint.image = ctx->fontImages[ctx->fontImageIdx];
+	paint.image = fctx->fontImages[fctx->fontImageIdx];
 
 	// Apply global alpha
 	paint.innerColor.a *= state->alpha;
 	paint.outerColor.a *= state->alpha;
 
-#ifdef NANOVG_CLEARTYPE
-   // even if we have no proper LCD info, the drawing looks better or same
-   // with it
-   paint.drawingFont = 1;
-#endif
+   paint.clearType = state->clearType;
    ctx->params.renderTriangles(ctx->params.userPtr, &paint, state->compositeOperation, &state->scissor, verts, nverts, ctx->fringeWidth);
 
 	ctx->drawCallCount++;
@@ -3067,25 +3234,29 @@ float nvgText(NVGcontext* ctx, float x, float y, const char* string, const char*
 	int cverts = 0;
 	int nverts = 0;
 	int isFlipped = nvg__isTransformFlipped(state->xform);
+   FONScontext *fs;
 
 	if (end == NULL)
 		end = string + strlen(string);
 
 	if (state->fontId == FONS_INVALID) return x;
 
-	fonsSetSize(ctx->fs, state->fontSize*scale);
-	fonsSetSpacing(ctx->fs, state->letterSpacing*scale);
-	fonsSetBlur(ctx->fs, state->fontBlur*scale);
-	fonsSetAlign(ctx->fs, state->textAlign);
-	fonsSetFont(ctx->fs, state->fontId);
+   fs = ctx->fontContexts[ state->clearType].fs;
+
+	fonsSetSize(fs, state->fontSize*scale);
+	fonsSetSpacing(fs, state->letterSpacing*scale);
+   if( ! state->clearType)
+	  fonsSetBlur(fs, state->fontBlur*scale);
+	fonsSetAlign(fs, state->textAlign);
+	fonsSetFont(fs, state->fontId);
 
 	cverts = nvg__maxi(2, (int)(end - string)) * 6; // conservative estimate.
 	verts = nvg__allocTempVerts(ctx, cverts);
 	if (verts == NULL) return x;
 
-	fonsTextIterInit(ctx->fs, &iter, x*scale, y*scale, string, end, FONS_GLYPH_BITMAP_REQUIRED);
+	fonsTextIterInit(fs, &iter, x*scale, y*scale, string, end, FONS_GLYPH_BITMAP_REQUIRED);
 	prevIter = iter;
-	while (fonsTextIterNext(ctx->fs, &iter, &q)) {
+	while (fonsTextIterNext(fs, &iter, &q)) {
 		float c[4*2];
 		if (iter.prevGlyphIndex == -1) { // can not retrieve glyph?
 			if (nverts != 0) {
@@ -3095,7 +3266,7 @@ float nvgText(NVGcontext* ctx, float x, float y, const char* string, const char*
 			if (!nvg__allocTextAtlas(ctx))
 				break; // no memory :(
 			iter = prevIter;
-			fonsTextIterNext(ctx->fs, &iter, &q); // try again
+			fonsTextIterNext(fs, &iter, &q); // try again
 			if (iter.prevGlyphIndex == -1) // still can not find glyph?
 				break;
 		}
@@ -3176,6 +3347,7 @@ int nvgTextGlyphPositions(NVGcontext* ctx, float x, float y, const char* string,
 	FONStextIter iter, prevIter;
 	FONSquad q;
 	int npos = 0;
+   FONScontext *fs;
 
 	if (state->fontId == FONS_INVALID) return 0;
 
@@ -3185,20 +3357,23 @@ int nvgTextGlyphPositions(NVGcontext* ctx, float x, float y, const char* string,
 	if (string == end)
 		return 0;
 
-	fonsSetSize(ctx->fs, state->fontSize*scale);
-	fonsSetSpacing(ctx->fs, state->letterSpacing*scale);
-	fonsSetBlur(ctx->fs, state->fontBlur*scale);
-	fonsSetAlign(ctx->fs, state->textAlign);
-	fonsSetFont(ctx->fs, state->fontId);
+   fs = ctx->fontContexts[ state->clearType].fs;
+
+	fonsSetSize(fs, state->fontSize*scale);
+	fonsSetSpacing(fs, state->letterSpacing*scale);
+   if( ! state->clearType)
+     fonsSetBlur(fs, state->fontBlur*scale);
+	fonsSetAlign(fs, state->textAlign);
+	fonsSetFont(fs, state->fontId);
 
    // MEMO: the nvg__allocTextAtlas is not called when
    //       FONS_GLYPH_BITMAP_OPTIONAL is set
-	fonsTextIterInit(ctx->fs, &iter, x*scale, y*scale, string, end, FONS_GLYPH_BITMAP_OPTIONAL);
+	fonsTextIterInit(fs, &iter, x*scale, y*scale, string, end, FONS_GLYPH_BITMAP_OPTIONAL);
 	prevIter = iter;
-	while (fonsTextIterNext(ctx->fs, &iter, &q)) {
+	while (fonsTextIterNext(fs, &iter, &q)) {
 		if (iter.prevGlyphIndex < 0 && nvg__allocTextAtlas(ctx)) { // can not retrieve glyph?
 			iter = prevIter;
-			fonsTextIterNext(ctx->fs, &iter, &q); // try again
+			fonsTextIterNext(fs, &iter, &q); // try again
 		}
 		prevIter = iter;
 		positions[npos].str = iter.str;
@@ -3246,6 +3421,7 @@ int nvgTextBreakLines(NVGcontext* ctx, const char* string, const char* end, floa
 	float breakMaxX = 0;
 	int type = NVG_SPACE, ptype = NVG_SPACE;
 	unsigned int pcodepoint = 0;
+   FONScontext *fs;
 
 	if (maxRows == 0) return 0;
 	if (state->fontId == FONS_INVALID) return 0;
@@ -3255,20 +3431,23 @@ int nvgTextBreakLines(NVGcontext* ctx, const char* string, const char* end, floa
 
 	if (string == end) return 0;
 
-	fonsSetSize(ctx->fs, state->fontSize*scale);
-	fonsSetSpacing(ctx->fs, state->letterSpacing*scale);
-	fonsSetBlur(ctx->fs, state->fontBlur*scale);
-	fonsSetAlign(ctx->fs, state->textAlign);
-	fonsSetFont(ctx->fs, state->fontId);
+   fs = ctx->fontContexts[ state->clearType].fs;
+
+	fonsSetSize(fs, state->fontSize*scale);
+	fonsSetSpacing(fs, state->letterSpacing*scale);
+   if( ! state->clearType)
+     fonsSetBlur(fs, state->fontBlur*scale);
+	fonsSetAlign(fs, state->textAlign);
+	fonsSetFont(fs, state->fontId);
 
 	breakRowWidth *= scale;
 
-	fonsTextIterInit(ctx->fs, &iter, 0, 0, string, end, FONS_GLYPH_BITMAP_OPTIONAL);
+	fonsTextIterInit(fs, &iter, 0, 0, string, end, FONS_GLYPH_BITMAP_OPTIONAL);
 	prevIter = iter;
-	while (fonsTextIterNext(ctx->fs, &iter, &q)) {
+	while (fonsTextIterNext(fs, &iter, &q)) {
 		if (iter.prevGlyphIndex < 0 && nvg__allocTextAtlas(ctx)) { // can not retrieve glyph?
 			iter = prevIter;
-			fonsTextIterNext(ctx->fs, &iter, &q); // try again
+			fonsTextIterNext(fs, &iter, &q); // try again
 		}
 		prevIter = iter;
 		switch (iter.codepoint) {
@@ -3438,6 +3617,7 @@ float nvgTextBounds(NVGcontext* ctx, float x, float y, const char* string, const
 	float scale = nvg__getFontScale(state) * ctx->devicePxRatio;
 	float invscale = 1.0f / scale;
 	float width;
+   FONScontext *fs;
 
 	if (state->fontId == FONS_INVALID) {
 		if (bounds != NULL)
@@ -3445,16 +3625,19 @@ float nvgTextBounds(NVGcontext* ctx, float x, float y, const char* string, const
 		return 0.0;
 	}
 
-	fonsSetSize(ctx->fs, state->fontSize*scale);
-	fonsSetSpacing(ctx->fs, state->letterSpacing*scale);
-	fonsSetBlur(ctx->fs, state->fontBlur*scale);
-	fonsSetAlign(ctx->fs, state->textAlign);
-	fonsSetFont(ctx->fs, state->fontId);
+   fs = ctx->fontContexts[ state->clearType].fs;
 
-	width = fonsTextBounds(ctx->fs, x*scale, y*scale, string, end, bounds);
+	fonsSetSize(fs, state->fontSize*scale);
+	fonsSetSpacing(fs, state->letterSpacing*scale);
+   if( ! state->clearType)
+     fonsSetBlur(fs, state->fontBlur*scale);
+	fonsSetAlign(fs, state->textAlign);
+	fonsSetFont(fs, state->fontId);
+
+	width = fonsTextBounds(fs, x*scale, y*scale, string, end, bounds);
 	if (bounds != NULL) {
 		// Use line bounds for height.
-		fonsLineBounds(ctx->fs, y*scale, &bounds[1], &bounds[3]);
+		fonsLineBounds(fs, y*scale, &bounds[1], &bounds[3]);
 		bounds[0] *= invscale;
 		bounds[1] *= invscale;
 		bounds[2] *= invscale;
@@ -3477,6 +3660,7 @@ void   nvgTextVisualBounds(NVGcontext* ctx, float x, float y, const char* string
 	float miny;
 	float maxx = 0.0f;
 	float maxy;
+   FONScontext *fs;
 
 	if ( ! bounds)
 		return;
@@ -3493,18 +3677,21 @@ void   nvgTextVisualBounds(NVGcontext* ctx, float x, float y, const char* string
 	if (string == end)
 		return;
 
-	fonsSetSize(ctx->fs, state->fontSize*scale);
-	fonsSetSpacing(ctx->fs, state->letterSpacing*scale);
-	fonsSetBlur(ctx->fs, state->fontBlur*scale);
-	fonsSetAlign(ctx->fs, state->textAlign);
-	fonsSetFont(ctx->fs, state->fontId);
+   fs = ctx->fontContexts[ state->clearType].fs;
 
-	fonsTextIterInit(ctx->fs, &iter, x*scale, y*scale, string, end, FONS_GLYPH_BITMAP_OPTIONAL);
+	fonsSetSize(fs, state->fontSize*scale);
+	fonsSetSpacing(fs, state->letterSpacing*scale);
+   if( ! state->clearType)
+     fonsSetBlur(fs, state->fontBlur*scale);
+	fonsSetAlign(fs, state->textAlign);
+	fonsSetFont(fs, state->fontId);
+
+	fonsTextIterInit(fs, &iter, x*scale, y*scale, string, end, FONS_GLYPH_BITMAP_OPTIONAL);
 	prevIter = iter;
-	while (fonsTextIterNext(ctx->fs, &iter, &q)) {
+	while (fonsTextIterNext(fs, &iter, &q)) {
 		if (iter.prevGlyphIndex < 0 && nvg__allocTextAtlas(ctx)) { // can not retrieve glyph?
 			iter = prevIter;
-			fonsTextIterNext(ctx->fs, &iter, &q); // try again
+			fonsTextIterNext(fs, &iter, &q); // try again
 		}
 		prevIter = iter;
 
@@ -3529,7 +3716,7 @@ void   nvgTextVisualBounds(NVGcontext* ctx, float x, float y, const char* string
 	bounds[ 2] = maxx; // sic
 
 	// get textBoxBounds top and height
-	fonsLineBounds(ctx->fs, y*scale, &bounds[ 4], &bounds[ 5]);
+	fonsLineBounds(fs, y*scale, &bounds[ 4], &bounds[ 5]);
 	bounds[ 4] *= invscale;
 	bounds[ 5] *= invscale;
 }
@@ -3549,6 +3736,7 @@ void nvgTextBoxBounds(NVGcontext* ctx, float x, float y, float breakRowWidth, co
 	int valign = state->textAlign & (NVG_ALIGN_TOP | NVG_ALIGN_MIDDLE | NVG_ALIGN_BOTTOM | NVG_ALIGN_BASELINE);
 	float lineh = 0, rminy = 0, rmaxy = 0;
 	float minx, miny, maxx, maxy;
+   FONScontext *fs;
 
 	if (state->fontId == FONS_INVALID) {
 		if (bounds != NULL)
@@ -3563,12 +3751,15 @@ void nvgTextBoxBounds(NVGcontext* ctx, float x, float y, float breakRowWidth, co
 	minx = maxx = x;
 	miny = maxy = y;
 
-	fonsSetSize(ctx->fs, state->fontSize*scale);
-	fonsSetSpacing(ctx->fs, state->letterSpacing*scale);
-	fonsSetBlur(ctx->fs, state->fontBlur*scale);
-	fonsSetAlign(ctx->fs, state->textAlign);
-	fonsSetFont(ctx->fs, state->fontId);
-	fonsLineBounds(ctx->fs, 0, &rminy, &rmaxy);
+   fs = ctx->fontContexts[ state->clearType].fs;
+
+	fonsSetSize(fs, state->fontSize*scale);
+	fonsSetSpacing(fs, state->letterSpacing*scale);
+   if( ! state->clearType)
+     fonsSetBlur(fs, state->fontBlur*scale);
+	fonsSetAlign(fs, state->textAlign);
+	fonsSetFont(fs, state->fontId);
+	fonsLineBounds(fs, 0, &rminy, &rmaxy);
 	rminy *= invscale;
 	rmaxy *= invscale;
 
@@ -3613,16 +3804,19 @@ void nvgTextMetrics(NVGcontext* ctx, float* ascender, float* descender, float* l
 	NVGstate* state = nvg__getState(ctx);
 	float scale = nvg__getFontScale(state) * ctx->devicePxRatio;
 	float invscale = 1.0f / scale;
+   FONScontext *fs;
 
 	if (state->fontId == FONS_INVALID) return;
 
-	fonsSetSize(ctx->fs, state->fontSize*scale);
-	fonsSetSpacing(ctx->fs, state->letterSpacing*scale);
-	fonsSetBlur(ctx->fs, state->fontBlur*scale);
-	fonsSetAlign(ctx->fs, state->textAlign);
-	fonsSetFont(ctx->fs, state->fontId);
+   fs = ctx->fontContexts[ state->clearType].fs;
+	fonsSetSize(fs, state->fontSize*scale);
+	fonsSetSpacing(fs, state->letterSpacing*scale);
+   if( ! state->clearType)
+     fonsSetBlur(fs, state->fontBlur*scale);
+	fonsSetAlign(fs, state->textAlign);
+	fonsSetFont(fs, state->fontId);
 
-	fonsVertMetrics(ctx->fs, ascender, descender, lineh);
+	fonsVertMetrics(fs, ascender, descender, lineh);
 	if (ascender != NULL)
 		*ascender *= invscale;
 	if (descender != NULL)
@@ -3642,7 +3836,7 @@ void *nvgGetFontHandle(NVGcontext* ctx, int fontId)
       if (state->fontId == FONS_INVALID) return( NULL);
       fontId = state->fontId;
    }
-   return( fonsGetFontHandle( ctx->fs, fontId));
+   return( fonsGetFontHandle( ctx->fontContexts[ state->clearType].fs, fontId));
 }
 
 #ifdef NANOVG_EXTENSION_SOURCE
