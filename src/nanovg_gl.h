@@ -44,18 +44,18 @@ enum NVGcreateFlags {
 	NVG_STENCIL_STROKES	= 1<<1,
 	// Flag indicating that additional debug checks are done.
 	NVG_DEBUG 			= 1<<2,
-   // Create a path context, which just holds a path, that can then be used to set the path of
-   // another context. Only a limited amount of operations are possible with such a context
-   // like nvgMoveTo, nvgArc etc. You can not save/restore a context
-   NVG_PATH_ONLY     = 1<<3,
-   // Create a font context, which can only be used for text metrics and glyph positions
-   // another context. Only a limited amount of operations are possible with such a context
-   // Yoi can not set NVG_PATH_ONLY and NVG_FONT_ONLY
-   NVG_FONT_ONLY     = 1<<4,
-   // Enable clearType
-   NVG_CLEARTYPE     = 1<<5,
-   // Enable MSAA (if this is set, then NVG_ANTIALIAS should not be set)
-   NVG_MSAA          = 1<<6
+	// Create a path context, which just holds a path, that can then be used to set the path of
+	// another context. Only a limited amount of operations are possible with such a context
+	// like nvgMoveTo, nvgArc etc. You can not save/restore a context
+	NVG_PATH_ONLY     = 1<<3,
+	// Create a font context, which can only be used for text metrics and glyph positions
+	// another context. Only a limited amount of operations are possible with such a context
+	// Yoi can not set NVG_PATH_ONLY and NVG_FONT_ONLY
+	NVG_FONT_ONLY     = 1<<4,
+	// Enable clearType
+	NVG_CLEARTYPE     = 1<<5,
+	// Enable MSAA (if this is set, then NVG_ANTIALIAS should not be set)
+	NVG_MSAA          = 1<<6
 };
 
 #if defined NANOVG_GL2_IMPLEMENTATION
@@ -156,7 +156,7 @@ enum GLNVGshaderType {
 	NSVG_SHADER_FILLIMG   = 1,
 	NSVG_SHADER_SIMPLE    = 2,
 	NSVG_SHADER_IMG       = 3,
-   NSVG_SHADER_CLEARTYPE = 4  // Only used when NANOVG_CLEARTYPE is defined
+	NSVG_SHADER_CLEARTYPE = 4  // Only used when NANOVG_CLEARTYPE is defined
 };
 
 #if NANOVG_GL_USE_UNIFORMBUFFER
@@ -185,9 +185,9 @@ typedef struct GLNVGtexture GLNVGtexture;
 static int   glnvg__isMSAATexture( GLNVGtexture *tex)
 {
 #ifdef NVG_TEXTURE_MSAA
-   return( tex->type == NVG_TEXTURE_MSAA);
+	return( tex->type == NVG_TEXTURE_MSAA);
 #else
-   return( 0);
+	return( 0);
 #endif
 }
 
@@ -337,22 +337,22 @@ static void glnvg__bindTexture(GLNVGcontext* gl, GLuint tex, int msaa)
 #if NANOVG_GL_USE_STATE_FILTER
 	if (gl->boundTexture != tex) {
 		gl->boundTexture = tex;
-   }
+	}
 #endif
 #ifdef NANOVG_HAVE_MSAA
-   if( msaa)
-   {
-   	glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, tex);
-      glBindTexture(GL_TEXTURE_2D, 0);
-   }
-   else
+	if( msaa)
+	{
+		glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, tex);
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
+	else
 #endif
-   {
+	{
 #ifdef NANOVG_HAVE_MSAA
-      glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, 0);
+		glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, 0);
 #endif
-      glBindTexture(GL_TEXTURE_2D, tex);
-   }
+		glBindTexture(GL_TEXTURE_2D, tex);
+	}
 }
 
 static void glnvg__stencilMask(GLNVGcontext* gl, GLuint mask)
@@ -463,7 +463,7 @@ static int glnvg__deleteTexture(GLNVGcontext* gl, int id)
 	if( ! tex)
 		return 0;
 #ifdef DEBUG_IMAGE
-   fprintf( stderr, "Delete image %d tex: %p gpu: %d type: %d flags: 0x%x\n", tex->id, tex, tex->tex, tex->type, tex->flags);
+	fprintf( stderr, "Delete image %d tex: %p gpu: %d type: %d flags: 0x%x\n", tex->id, tex, tex->tex, tex->type, tex->flags);
 #endif
 	if( (tex->flags & NVG_IMAGE_NODELETE) == 0)
 		glDeleteTextures(1, &tex->tex);
@@ -588,10 +588,10 @@ static int glnvg__renderCreate(void* uptr)
 
 	// TODO: mediump float may not be enough for GLES2 in iOS.
 	// see the following discussion: https://github.com/memononen/nanovg/issues/46
-   // For ClearType we need the dFdx function, which is only available
-   // with "GL_OES_standard_derivatives". If you remove dFdx and set deriv
-   // to 0, you can't flip the text (gainly looking)
-   //
+	// For ClearType we need the dFdx function, which is only available
+	// with "GL_OES_standard_derivatives". If you remove dFdx and set deriv
+	// to 0, you can't flip the text (gainly looking)
+	//
 	static const char* shaderHeader =
 #if defined NANOVG_GL2
 		"#define NANOVG_GL2 1\n"
@@ -600,7 +600,7 @@ static int glnvg__renderCreate(void* uptr)
 		"#define NANOVG_GL3 1\n"
 #elif defined NANOVG_GLES2
 		"#version 100\n"
-      "#extension GL_OES_standard_derivatives : enable\n"
+		"#extension GL_OES_standard_derivatives : enable\n"
 		"#define NANOVG_GL2 1\n"
 #elif defined NANOVG_GLES3
 		"#version 300 es\n"
@@ -751,27 +751,27 @@ static int glnvg__renderCreate(void* uptr)
 		"		color *= scissor;\n"
 		"		result = color * innerCol;\n"
 		"	}\n"
-      "  else if ( type == 4 )      // GLNVGshaderType::NSVG_SHADER_CLEARTYPE\n"
-      "  {\n"
-      "#ifdef NANOVG_GL3\n"
-      "     vec4 color = texture(tex, ftcoord);\n"
-      "#else\n"
-      "     vec4 color = texture2D(tex, ftcoord);\n"
-      "#endif\n"
-      "     float deriv = dFdx( ftcoord.x );\n"
-      "     if( deriv < 0.0 )\n"
-      "        color.xz = color.zx; // The text is horizontally mirrored, or rotated 180 degrees. Flip red and blue subpixels of the texture.\n"
-      "     else if ( deriv == 0.0 )   // The text is rotated 90 degrees. Average all 3 subpixels, disabling ClearType\n"
-      "        color = vec4( ( color.x + color.y + color.z ) * ( 1.0 / 3.0 ) );\n"
-      "\n"
-      "     if( color.w * scissor * innerCol.w < ( 1.0 / 256.0 ) )\n"
-      "        discard;\n"
-      "\n"
-      "     // Do the clear type thing\n"
-      "     result.xyz = color.xyz * innerCol.xyz + ( vec3( innerCol.w ) - color.xyz ) * outerCol.xyz;\n"
-      "     result.w = innerCol.w;\n"
-      "     result *= scissor;\n"
-      "  }\n"
+		"  else if ( type == 4 )      // GLNVGshaderType::NSVG_SHADER_CLEARTYPE\n"
+		"  {\n"
+		"#ifdef NANOVG_GL3\n"
+		"     vec4 color = texture(tex, ftcoord);\n"
+		"#else\n"
+		"     vec4 color = texture2D(tex, ftcoord);\n"
+		"#endif\n"
+		"     float deriv = dFdx( ftcoord.x );\n"
+		"     if( deriv < 0.0 )\n"
+		"        color.xz = color.zx; // The text is horizontally mirrored, or rotated 180 degrees. Flip red and blue subpixels of the texture.\n"
+		"     else if ( deriv == 0.0 )   // The text is rotated 90 degrees. Average all 3 subpixels, disabling ClearType\n"
+		"        color = vec4( ( color.x + color.y + color.z ) * ( 1.0 / 3.0 ) );\n"
+		"\n"
+		"     if( color.w * scissor * innerCol.w < ( 1.0 / 256.0 ) )\n"
+		"        discard;\n"
+		"\n"
+		"     // Do the clear type thing\n"
+		"     result.xyz = color.xyz * innerCol.xyz + ( vec3( innerCol.w ) - color.xyz ) * outerCol.xyz;\n"
+		"     result.w = innerCol.w;\n"
+		"     result *= scissor;\n"
+		"  }\n"
 		"#ifdef NANOVG_GL3\n"
 		"	outColor = result;\n"
 		"#else\n"
@@ -821,7 +821,7 @@ static int glnvg__renderCreateTexture(void* uptr, int type, int w, int h, int im
 {
 	GLNVGcontext* gl = (GLNVGcontext*)uptr;
 	GLNVGtexture* tex = glnvg__allocTexture(gl);
-   int  samplerType;
+	int  samplerType;
 
 	if (tex == NULL) return 0;
 
@@ -845,15 +845,15 @@ static int glnvg__renderCreateTexture(void* uptr, int type, int w, int h, int im
 	tex->width = w;
 	tex->height = h;
 #ifdef NVG_TEXTURE_MSAA
-   if( imageFlags & NVG_IMAGE_MSAA)
-      tex->type = NVG_TEXTURE_MSAA;
-   else
+	if( imageFlags & NVG_IMAGE_MSAA)
+		tex->type = NVG_TEXTURE_MSAA;
+	else
 #endif
-	   tex->type = type;
+		tex->type = type;
 	tex->flags = imageFlags;
-   glnvg__checkError(gl, "gen tex");
+	glnvg__checkError(gl, "gen tex");
 	glnvg__bindTexture(gl, tex->tex, glnvg__isMSAATexture( tex));
-   glnvg__checkError(gl, "bind tex");
+	glnvg__checkError(gl, "bind tex");
 
 	glPixelStorei(GL_UNPACK_ALIGNMENT,1);
 #ifndef NANOVG_GLES2
@@ -862,10 +862,10 @@ static int glnvg__renderCreateTexture(void* uptr, int type, int w, int h, int im
 	glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
 #endif
 
-   samplerType = GL_TEXTURE_2D;
+	samplerType = GL_TEXTURE_2D;
 #ifdef NANOVG_HAVE_MSAA
-   if( glnvg__isMSAATexture( tex))
-      samplerType = GL_TEXTURE_2D_MULTISAMPLE;
+	if( glnvg__isMSAATexture( tex))
+		samplerType = GL_TEXTURE_2D_MULTISAMPLE;
 #endif
 
 #if defined (NANOVG_GL2)
@@ -874,21 +874,21 @@ static int glnvg__renderCreateTexture(void* uptr, int type, int w, int h, int im
 		glTexParameteri(samplerType, GL_GENERATE_MIPMAP, GL_TRUE);
 	}
 #endif
-   glnvg__checkError(gl, "before set data");
+	glnvg__checkError(gl, "before set data");
 
-   switch( tex->type)
-   {
+	switch( tex->type)
+	{
 #ifdef NANOVG_HAVE_MSAA
-   case NVG_TEXTURE_MSAA :
-      assert( ! data);
-      glTexStorage2DMultisample( GL_TEXTURE_2D_MULTISAMPLE, 4, GL_RGBA8, w, h, GL_TRUE);
-      break;
+	case NVG_TEXTURE_MSAA :
+		assert( ! data);
+		glTexStorage2DMultisample( GL_TEXTURE_2D_MULTISAMPLE, 4, GL_RGBA8, w, h, GL_TRUE);
+		break;
 #endif
-   case NVG_TEXTURE_RGBA :
+	case NVG_TEXTURE_RGBA :
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-      break;
+		break;
 
-   case NVG_TEXTURE_ALPHA:
+	case NVG_TEXTURE_ALPHA:
 #if defined(NANOVG_GLES2) || defined (NANOVG_GL2)
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w, h, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, data);
 #elif defined(NANOVG_GLES3)
@@ -896,55 +896,55 @@ static int glnvg__renderCreateTexture(void* uptr, int type, int w, int h, int im
 #else
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, w, h, 0, GL_RED, GL_UNSIGNED_BYTE, data);
 #endif
-      break;
+		break;
 #ifdef DEBUG
-   default :
-      abort();
+	default :
+		abort();
 #endif
-   }
-   glnvg__checkError(gl, "set data");
+	}
+	glnvg__checkError(gl, "set data");
 
-   // all these options aren't defined for multisample
-   if( samplerType == GL_TEXTURE_2D)
-   {
-   	if (imageFlags & NVG_IMAGE_GENERATE_MIPMAPS) {
-   		if (imageFlags & NVG_IMAGE_NEAREST) {
-   			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
-   		} else {
-   			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-   		}
-   	} else {
-   		if (imageFlags & NVG_IMAGE_NEAREST) {
-   			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-   		} else {
-   			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-   		}
-   	}
-      glnvg__checkError(gl, "set min");
+	// all these options aren't defined for multisample
+	if( samplerType == GL_TEXTURE_2D)
+	{
+		if (imageFlags & NVG_IMAGE_GENERATE_MIPMAPS) {
+			if (imageFlags & NVG_IMAGE_NEAREST) {
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+			} else {
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+			}
+		} else {
+			if (imageFlags & NVG_IMAGE_NEAREST) {
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			} else {
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			}
+		}
+		glnvg__checkError(gl, "set min");
 
-   	if (imageFlags & NVG_IMAGE_NEAREST) {
-   		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-   	} else {
-   		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-   	}
-      glnvg__checkError(gl, "set mag");
+		if (imageFlags & NVG_IMAGE_NEAREST) {
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		} else {
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		}
+		glnvg__checkError(gl, "set mag");
 
-   	if (imageFlags & NVG_IMAGE_REPEATX)
-   		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-   	else
-   		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-      glnvg__checkError(gl, "set wrap_s");
+		if (imageFlags & NVG_IMAGE_REPEATX)
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		else
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glnvg__checkError(gl, "set wrap_s");
 
-   	if (imageFlags & NVG_IMAGE_REPEATY)
-   		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-   	else
-   		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-      glnvg__checkError(gl, "set wrap_t");
-   }
-   else
-   {
-      assert( ! (imageFlags & (NVG_IMAGE_NEAREST|NVG_IMAGE_REPEATX|NVG_IMAGE_REPEATY)));
-   }
+		if (imageFlags & NVG_IMAGE_REPEATY)
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		else
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glnvg__checkError(gl, "set wrap_t");
+	}
+	else
+	{
+		assert( ! (imageFlags & (NVG_IMAGE_NEAREST|NVG_IMAGE_REPEATX|NVG_IMAGE_REPEATY)));
+	}
 
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 #ifndef NANOVG_GLES2
@@ -953,27 +953,27 @@ static int glnvg__renderCreateTexture(void* uptr, int type, int w, int h, int im
 	glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
 #endif
 
-   glnvg__checkError(gl, "set pixelstore");
+	glnvg__checkError(gl, "set pixelstore");
 
 	// The new way to build mipmaps on GLES and GL3
 #if !defined(NANOVG_GL2)
-   if( samplerType == GL_TEXTURE_2D)
-   {
-   	if (imageFlags & NVG_IMAGE_GENERATE_MIPMAPS) {
-   		glGenerateMipmap(samplerType);
-   	}
-   }
-   else
-   {
-      assert( ! (imageFlags & (NVG_IMAGE_GENERATE_MIPMAPS)));
-   }
+	if( samplerType == GL_TEXTURE_2D)
+	{
+		if (imageFlags & NVG_IMAGE_GENERATE_MIPMAPS) {
+			glGenerateMipmap(samplerType);
+		}
+	}
+	else
+	{
+		assert( ! (imageFlags & (NVG_IMAGE_GENERATE_MIPMAPS)));
+	}
 #endif
 
 	glnvg__checkError(gl, "create tex");
 	glnvg__bindTexture(gl, 0, glnvg__isMSAATexture( tex));
 
 #ifdef DEBUG_IMAGE
-   fprintf( stderr, "Create image %d tex: %p gpu: %d type: %d flags: 0x%x\n", tex->id, tex, tex->tex, tex->type, tex->flags);
+	fprintf( stderr, "Create image %d tex: %p gpu: %d type: %d flags: 0x%x\n", tex->id, tex, tex->tex, tex->type, tex->flags);
 #endif
 
 	return tex->id;
@@ -994,7 +994,7 @@ static int glnvg__renderDefineTexture(void* uptr, int w, int h, int flags, int t
 	tex->tex    = (int) (intptr_t) texture;
 
 #ifdef DEBUG_IMAGE
-   fprintf( stderr, "Define image %d tex: %p gpu: %d type: %d flags: 0x%x\n", tex->id, tex, tex->tex, tex->type, tex->flags);
+	fprintf( stderr, "Define image %d tex: %p gpu: %d type: %d flags: 0x%x\n", tex->id, tex, tex->tex, tex->type, tex->flags);
 #endif
 	return tex->id;
 }
@@ -1003,13 +1003,13 @@ static int glnvg__renderDefineTexture(void* uptr, int w, int h, int flags, int t
 static int   glnvg__renderValidatePaintTexture(void* uptr, int image)
 {
 #ifdef NANOVG_HAVE_MSAA
-   GLNVGcontext* gl = (GLNVGcontext*)uptr;
-   GLNVGtexture* tex = glnvg__findTexture(gl, image);
+	GLNVGcontext* gl = (GLNVGcontext*)uptr;
+	GLNVGtexture* tex = glnvg__findTexture(gl, image);
 
-   if( tex && tex->type == NVG_TEXTURE_MSAA)
-      return( 0);
+	if( tex && tex->type == NVG_TEXTURE_MSAA)
+		return( 0);
 #endif
-   return( 1);
+	return( 1);
 }
 
 
@@ -1018,13 +1018,13 @@ static int   glnvg__renderGetTextureInfo(void* uptr, int image, int *p_flags, in
 	GLNVGcontext* gl = (GLNVGcontext*)uptr;
 	GLNVGtexture* tex = glnvg__findTexture(gl, image);
 
-   if( p_flags)
-      *p_flags = tex->flags;
-   if( p_type)
-      *p_type  = tex->type;
-   if( p_tex)
-      *p_tex   = (void *) (intptr_t) tex->tex;
-   return( 1);
+	if( p_flags)
+		*p_flags = tex->flags;
+	if( p_type)
+		*p_type  = tex->type;
+	if( p_tex)
+		*p_tex   = (void *) (intptr_t) tex->tex;
+	return( 1);
 }
 
 //
@@ -1035,14 +1035,14 @@ static int glnvg__renderForgetTexture(void* uptr, int image)
 	GLNVGcontext* gl = (GLNVGcontext*)uptr;
 	GLNVGtexture* tex = glnvg__findTexture(gl, image);
 
-   if( ! tex)
-      return 0;
+	if( ! tex)
+		return 0;
 #ifdef DEBUG_IMAGE
-   fprintf( stderr, "Forget image %d tex: %p gpu: %d type: %d flags: 0x%x\n", tex->id, tex, tex->tex, tex->type, tex->flags);
+	fprintf( stderr, "Forget image %d tex: %p gpu: %d type: %d flags: 0x%x\n", tex->id, tex, tex->tex, tex->type, tex->flags);
 #endif
-   tex->tex    = 0;
-   tex->flags |= NVG_IMAGE_NODELETE;
-   return 1;
+	tex->tex    = 0;
+	tex->flags |= NVG_IMAGE_NODELETE;
+	return 1;
 }
 
 // @mulle-nanovg@ <<
@@ -1062,7 +1062,7 @@ static int glnvg__renderUpdateTexture(void* uptr, int image, int x, int y, int w
 	if (tex == NULL) return 0;
 
 #ifdef NANOVG_HAVE_MSAA
-   assert(tex->type != NVG_TEXTURE_MSAA);
+	assert(tex->type != NVG_TEXTURE_MSAA);
 #endif
 	glnvg__bindTexture(gl, tex->tex, 0); // doesn't work for msaa
 
@@ -1082,23 +1082,23 @@ static int glnvg__renderUpdateTexture(void* uptr, int image, int x, int y, int w
 	w = tex->width;
 #endif
 
-   switch( tex->type)
-   {
-   case NVG_TEXTURE_RGBA  :
-      glTexSubImage2D(GL_TEXTURE_2D, 0, x,y, w,h, GL_RGBA, GL_UNSIGNED_BYTE, data);
-      break;
+	switch( tex->type)
+	{
+	case NVG_TEXTURE_RGBA  :
+		glTexSubImage2D(GL_TEXTURE_2D, 0, x,y, w,h, GL_RGBA, GL_UNSIGNED_BYTE, data);
+		break;
 
-   case NVG_TEXTURE_ALPHA :
+	case NVG_TEXTURE_ALPHA :
 #if defined(NANOVG_GLES2) || defined(NANOVG_GL2)
-      glTexSubImage2D(GL_TEXTURE_2D, 0, x,y, w,h, GL_LUMINANCE, GL_UNSIGNED_BYTE, data);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, x,y, w,h, GL_LUMINANCE, GL_UNSIGNED_BYTE, data);
 #else
-      glTexSubImage2D(GL_TEXTURE_2D, 0, x,y, w,h, GL_RED, GL_UNSIGNED_BYTE, data);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, x,y, w,h, GL_RED, GL_UNSIGNED_BYTE, data);
 #endif
-      break;
+		break;
 #ifdef DEBUG
-   default : abort();
+	default : abort();
 #endif
-   }
+	}
 
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 #ifndef NANOVG_GLES2
@@ -1147,7 +1147,7 @@ static NVGcolor glnvg__premulColor(NVGcolor c)
 }
 
 static int glnvg__convertPaint(GLNVGcontext* gl, GLNVGfragUniforms* frag, NVGpaint* paint,
-							   NVGscissor* scissor, float width, float fringe, float strokeThr)
+								NVGscissor* scissor, float width, float fringe, float strokeThr)
 {
 	GLNVGtexture* tex = NULL;
 	float invxform[6];
@@ -1228,7 +1228,7 @@ static void glnvg__setUniforms(GLNVGcontext* gl, int uniformOffset, int image)
 	GLNVGfragUniforms* frag = nvg__fragUniformPtr(gl, uniformOffset);
 	glUniform4fv(gl->shader.loc[GLNVG_LOC_FRAG], NANOVG_GL_UNIFORMARRAY_SIZE, &(frag->uniformArray[0][0]));
 #endif
-   glnvg__checkError(gl, "tex get uniforms");
+	glnvg__checkError(gl, "tex get uniforms");
 
 	if (image != 0) {
 		tex = glnvg__findTexture(gl, image);
@@ -1238,15 +1238,15 @@ static void glnvg__setUniforms(GLNVGcontext* gl, int uniformOffset, int image)
 		tex = glnvg__findTexture(gl, gl->dummyTex);
 	}
 
-   if (tex != NULL)
-   {
+	if (tex != NULL)
+	{
 #ifdef DEBUG_IMAGE
-      fprintf( stderr, "Bind   image %d tex: %p gpu: %d type: %d flags: 0x%x\n", tex->id, tex, tex->tex, tex->type, tex->flags);
+		fprintf( stderr, "Bind   image %d tex: %p gpu: %d type: %d flags: 0x%x\n", tex->id, tex, tex->tex, tex->type, tex->flags);
 #endif
-      glnvg__bindTexture(gl, tex->tex, glnvg__isMSAATexture( tex));
-   }
-   else
-      glnvg__bindTexture(gl, 0, 0);
+		glnvg__bindTexture(gl, tex->tex, glnvg__isMSAATexture( tex));
+	}
+	else
+		glnvg__bindTexture(gl, 0, 0);
 	glnvg__checkError(gl, "tex bind tex");
 }
 
@@ -1437,11 +1437,11 @@ static void glnvg__renderFlush(void* uptr)
 		// Setup require GL state.
 		glUseProgram(gl->shader.prog);
 #ifdef NANOVG_HAVE_MSAA
-      if( gl->flags & NVG_MSAA)
-      {
-         glEnable(GL_MULTISAMPLE);
-         glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, 0);
-      }
+		if( gl->flags & NVG_MSAA)
+		{
+			glEnable(GL_MULTISAMPLE);
+			glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, 0);
+		}
 #endif
 		glEnable(GL_CULL_FACE);
 		glCullFace(GL_BACK);
@@ -1513,8 +1513,8 @@ static void glnvg__renderFlush(void* uptr)
 		glDisable(GL_CULL_FACE);
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glUseProgram(0);
-      if( gl->flags & NVG_MSAA)
-         glnvg__bindTexture(gl, 0, 1);
+		if( gl->flags & NVG_MSAA)
+			glnvg__bindTexture(gl, 0, 1);
 		glnvg__bindTexture(gl, 0, 0);
 	}
 
@@ -1751,7 +1751,7 @@ error:
 }
 
 static void glnvg__renderTriangles(void* uptr, NVGpaint* paint, NVGcompositeOperationState compositeOperation, NVGscissor* scissor,
-								   const NVGvertex* verts, int nverts, float fringe)
+									const NVGvertex* verts, int nverts, float fringe)
 {
 	GLNVGcontext* gl = (GLNVGcontext*)uptr;
 	GLNVGcall* call = glnvg__allocCall(gl);
@@ -1774,8 +1774,8 @@ static void glnvg__renderTriangles(void* uptr, NVGpaint* paint, NVGcompositeOper
 	call->uniformOffset = glnvg__allocFragUniforms(gl, 1);
 	if (call->uniformOffset == -1) goto error;
 	frag = nvg__fragUniformPtr(gl, call->uniformOffset);
-   glnvg__convertPaint(gl, frag, paint, scissor, 1.0f, fringe, -1.0f);
-   frag->type = (paint->clearType) ? NSVG_SHADER_CLEARTYPE : NSVG_SHADER_IMG;
+	glnvg__convertPaint(gl, frag, paint, scissor, 1.0f, fringe, -1.0f);
+	frag->type = (paint->clearType) ? NSVG_SHADER_CLEARTYPE : NSVG_SHADER_IMG;
 	return;
 
 error:
@@ -1833,55 +1833,55 @@ NVGcontext* nvgCreateGLES3(int flags)
 
 	memset(&params, 0, sizeof(params));
 
-   switch( flags & (NVG_PATH_ONLY|NVG_FONT_ONLY))
-   {
-   case 0 : params.contextType = NVG_FULL_CONTEXT;
-            params.cStates     = NVG_MAX_STATES;
-            break;
+	switch( flags & (NVG_PATH_ONLY|NVG_FONT_ONLY))
+	{
+	case 0 : params.contextType = NVG_FULL_CONTEXT;
+				params.cStates     = NVG_MAX_STATES;
+				break;
 
-   case NVG_PATH_ONLY :
-            params.contextType = NVG_PATH_CONTEXT;
-            params.cStates     = NVG_MIN_STATES;
-            break;
+	case NVG_PATH_ONLY :
+				params.contextType = NVG_PATH_CONTEXT;
+				params.cStates     = NVG_MIN_STATES;
+				break;
 
-   case NVG_FONT_ONLY :
-            params.contextType = NVG_FONT_CONTEXT;
-            params.cStates     = NVG_MIN_STATES;
-            break;
+	case NVG_FONT_ONLY :
+				params.contextType = NVG_FONT_CONTEXT;
+				params.cStates     = NVG_MIN_STATES;
+				break;
 
-   default :
-      goto error;
-   }
+	default :
+		goto error;
+	}
 
-   if( params.contextType == NVG_FULL_CONTEXT)
-   {
-      GLNVGcontext* gl = (GLNVGcontext*)malloc(sizeof(GLNVGcontext));
-      if (gl == NULL) goto error;
-      memset(gl, 0, sizeof(GLNVGcontext));
+	if( params.contextType == NVG_FULL_CONTEXT)
+	{
+		GLNVGcontext* gl = (GLNVGcontext*)malloc(sizeof(GLNVGcontext));
+		if (gl == NULL) goto error;
+		memset(gl, 0, sizeof(GLNVGcontext));
 
-   	params.renderCreate = glnvg__renderCreate;
-   	params.renderCreateTexture = glnvg__renderCreateTexture;
-   	params.renderDeleteTexture = glnvg__renderDeleteTexture;
-   // @mulle-nanovg@ >>
-   	params.renderDefineTexture = glnvg__renderDefineTexture;
-   	params.renderForgetTexture = glnvg__renderForgetTexture;
-   	params.renderGetTextureInfo = glnvg__renderGetTextureInfo;
-      params.renderValidatePaintTexture = glnvg__renderValidatePaintTexture;
-   // @mulle-nanovg@ <<
-   	params.renderGetTextureSize = glnvg__renderGetTextureSize;
-   	params.renderUpdateTexture = glnvg__renderUpdateTexture;
-   	params.renderViewport = glnvg__renderViewport;
-   	params.renderCancel = glnvg__renderCancel;
-   	params.renderFlush = glnvg__renderFlush;
-   	params.renderFill = glnvg__renderFill;
-   	params.renderStroke = glnvg__renderStroke;
-   	params.renderTriangles = glnvg__renderTriangles;
-   	params.renderDelete = glnvg__renderDelete;
-      params.userPtr = gl;
-      gl->flags = flags;
-   }
+		params.renderCreate = glnvg__renderCreate;
+		params.renderCreateTexture = glnvg__renderCreateTexture;
+		params.renderDeleteTexture = glnvg__renderDeleteTexture;
+	// @mulle-nanovg@ >>
+		params.renderDefineTexture = glnvg__renderDefineTexture;
+		params.renderForgetTexture = glnvg__renderForgetTexture;
+		params.renderGetTextureInfo = glnvg__renderGetTextureInfo;
+		params.renderValidatePaintTexture = glnvg__renderValidatePaintTexture;
+	// @mulle-nanovg@ <<
+		params.renderGetTextureSize = glnvg__renderGetTextureSize;
+		params.renderUpdateTexture = glnvg__renderUpdateTexture;
+		params.renderViewport = glnvg__renderViewport;
+		params.renderCancel = glnvg__renderCancel;
+		params.renderFlush = glnvg__renderFlush;
+		params.renderFill = glnvg__renderFill;
+		params.renderStroke = glnvg__renderStroke;
+		params.renderTriangles = glnvg__renderTriangles;
+		params.renderDelete = glnvg__renderDelete;
+		params.userPtr = gl;
+		gl->flags = flags;
+	}
 	params.edgeAntiAlias = flags & NVG_ANTIALIAS ? 1 : 0;
-   params.clearType     = flags & NVG_CLEARTYPE ? 1 : 0;
+	params.clearType     = flags & NVG_CLEARTYPE ? 1 : 0;
 
 	ctx = nvgCreateInternal(&params);
 	if (ctx == NULL) goto error;
@@ -1923,9 +1923,9 @@ int nvglCreateImageFromHandleGLES3(NVGcontext* ctx, GLuint textureId, int w, int
 	if (tex == NULL) return 0;
 
 #ifdef NVG_TEXTURE_MSAA
-   if( imageFlags & NVG_IMAGE_MSAA)
-      tex->type = NVG_TEXTURE_MSAA;
-   else
+	if( imageFlags & NVG_IMAGE_MSAA)
+		tex->type = NVG_TEXTURE_MSAA;
+	else
 #endif
 	  tex->type = NVG_TEXTURE_RGBA;
 

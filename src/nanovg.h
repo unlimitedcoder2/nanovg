@@ -50,14 +50,14 @@ struct NVGpaint {
 	NVGcolor innerColor;
 	NVGcolor outerColor;
 	int image;
-   int clearType;
+	int clearType;
 };
 typedef struct NVGpaint NVGpaint;
 
 enum NVGcontextType {
-   NVG_FULL_CONTEXT = 0,
-   NVG_PATH_CONTEXT = 1,
-   NVG_FONT_CONTEXT = 2
+	NVG_FULL_CONTEXT = 0,
+	NVG_PATH_CONTEXT = 1,
+	NVG_FONT_CONTEXT = 2
 };
 
 
@@ -131,7 +131,7 @@ struct NVGglyphPosition {
 	const char* str;	// Position of the glyph in the input string.
 	float x;			// The x-coordinate of the logical glyph position.
 	float minx, maxx;	// The bounds of the glyph shape.
-   float miny, maxy; // The bounds of the glyph shape.
+	float miny, maxy; // The bounds of the glyph shape.
 };
 typedef struct NVGglyphPosition NVGglyphPosition;
 
@@ -145,15 +145,15 @@ struct NVGtextRow {
 typedef struct NVGtextRow NVGtextRow;
 
 enum NVGimageFlags {
-   NVG_IMAGE_GENERATE_MIPMAPS	= 1<<0,     // Generate mipmaps during creation of the image.
+	NVG_IMAGE_GENERATE_MIPMAPS	= 1<<0,     // Generate mipmaps during creation of the image.
 	NVG_IMAGE_REPEATX			= 1<<1,		// Repeat image in X direction.
 	NVG_IMAGE_REPEATY			= 1<<2,		// Repeat image in Y direction.
 	NVG_IMAGE_FLIPY				= 1<<3,		// Flips (inverses) image in Y direction when rendered.
 	NVG_IMAGE_PREMULTIPLIED		= 1<<4,		// Image data has premultiplied alpha.
 	NVG_IMAGE_NEAREST			= 1<<5,		// Image interpolation is Nearest instead Linear
-   NVG_IMAGE_MSAA          = 1<<6,     // only usable with nvgluCreateFramebuffer
-   NVG_IMAGE_RBO_LESS      = 1<<7      // convenience for framebuffer creation
-   // NVG_IMAGE_NODELETE 1 <<16 (defined elsewhere)
+	NVG_IMAGE_MSAA          = 1<<6,     // only usable with nvgluCreateFramebuffer
+	NVG_IMAGE_RBO_LESS      = 1<<7      // convenience for framebuffer creation
+	// NVG_IMAGE_NODELETE 1 <<16 (defined elsewhere)
 };
 
 enum NVGtess {
@@ -457,7 +457,7 @@ void nvgForgetImageTexture(NVGcontext* ctx, int image);
 // of the linear gradient, icol specifies the start color and ocol the end color.
 // The gradient is transformed by the current transform when it is passed to nvgFillPaint() or nvgStrokePaint().
 NVGpaint nvgLinearGradient(NVGcontext* ctx, float sx, float sy, float ex, float ey,
-						   NVGcolor icol, NVGcolor ocol);
+							NVGcolor icol, NVGcolor ocol);
 
 // Creates and returns a box gradient. Box gradient is a feathered rounded rectangle, it is useful for rendering
 // drop shadows or highlights for boxes. Parameters (x,y) define the top-left corner of the rectangle,
@@ -471,7 +471,7 @@ NVGpaint nvgBoxGradient(NVGcontext* ctx, float x, float y, float w, float h,
 // the inner and outer radius of the gradient, icol specifies the start color and ocol the end color.
 // The gradient is transformed by the current transform when it is passed to nvgFillPaint() or nvgStrokePaint().
 NVGpaint nvgRadialGradient(NVGcontext* ctx, float cx, float cy, float inr, float outr,
-						   NVGcolor icol, NVGcolor ocol);
+							NVGcolor icol, NVGcolor ocol);
 
 // Creates and returns an image pattern. Parameters (ox,oy) specify the left-top location of the image pattern,
 // (ex,ey) the size of one image, angle rotation around the top-left corner, image is handle to the image to render.
@@ -605,7 +605,7 @@ void nvgCopyPath(NVGcontext* ctx, NVGcontext *path);
 //		const char* txt = "Text me up.";
 //		nvgTextBounds(vg, x,y, txt, NULL, bounds);
 //		nvgBeginPath(vg);
-//		nvgRoundedRect(vg, bounds[0],bounds[1], bounds[2]-bounds[0], bounds[3]-bounds[1]);
+//		nvgRect(vg, bounds[0],bounds[1], bounds[2]-bounds[0], bounds[3]-bounds[1]);
 //		nvgFill(vg);
 //
 // Note: currently only solid color fill is supported for text.
@@ -748,9 +748,9 @@ struct NVGparams {
 	void* userPtr;
 	int edgeAntiAlias;
 // @mulle-nanovg@ >>
-   int clearType;
-   int cStates;
-   enum NVGcontextType   contextType;
+	int clearType;
+	int cStates;
+	enum NVGcontextType   contextType;
 // @mulle-nanovg@ <<
 	int (*renderCreate)(void* uptr);
 	int (*renderCreateTexture)(void* uptr, int type, int w, int h, int imageFlags, const unsigned char* data);
@@ -766,9 +766,9 @@ struct NVGparams {
 	void (*renderDelete)(void* uptr);
 // @mulle-nanovg@ >>
 	int (*renderDefineTexture)(void* uptr, int w, int h, int type, int flags, void *texture);
-   int (*renderForgetTexture)(void* uptr, int image);
+	int (*renderForgetTexture)(void* uptr, int image);
 	int (*renderGetTextureInfo)(void* uptr, int image, int *type, int *flags, void **texture);
-   int (*renderValidatePaintTexture)(void* uptr, int image);
+	int (*renderValidatePaintTexture)(void* uptr, int image);
 // @mulle-nanovg@ <<
 };
 typedef struct NVGparams NVGparams;
