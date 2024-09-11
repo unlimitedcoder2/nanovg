@@ -50,18 +50,20 @@ typedef struct NVGUserImplementation NVGUserImplementation;
 
 typedef struct NVGcontext NVGcontext;
 
+// NVGUserImplementation *nvgGetUserImplementationFromContext(NVGcontext *ctx);
+
 //
 // Logging
 //
 //
-void nvgLogFmt(NVGcontext *ctx, NVGLogLevel level, const char *fmt, ...);
+void nvgLogF(NVGcontext *ctx, NVGLogLevel level, const char *msg, ...);
 void nvgLog(NVGcontext *ctx, NVGLogLevel level, const char *msg);
 
-void nvgUserImplLogFmt(NVGUserImplementation *userImplementation, NVGLogLevel level, const char *fmt, va_list args);
+void nvgUserImplLogF(NVGUserImplementation *userImplementation, NVGLogLevel level, const char *fmt, va_list args);
 void nvgUserImplLog(NVGUserImplementation *userImplementation, NVGLogLevel level, const char *msg);
 
 #ifndef NVG_LOG_LINE
-#define NVG_LOG_LINE(ctx, level, msg) nvgLogFmt(ctx, level, "%s from %s in %s at %d", msg, __func__, __FILE__, __LINE__)
+#define NVG_LOG_LINE(ctx, level, msg) nvgLogF(ctx, level, "%s from %s in %s at %d", msg, __func__, __FILE__, __LINE__)
 #endif
 
 

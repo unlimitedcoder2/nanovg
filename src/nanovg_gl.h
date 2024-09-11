@@ -384,7 +384,7 @@ static void nvgGLLogFmt(GLNVGcontext *gl, NVGLogLevel level, const char *fmt, ..
 	va_list args;
 	va_start(args, fmt);
 
-	nvgUserImplLogFmt(gl->userImplementation, level, fmt, args);
+	nvgUserImplLogF(gl->userImplementation, level, fmt, args);
 
 	va_end(args);
 }

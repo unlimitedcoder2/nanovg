@@ -246,24 +246,29 @@ static void nvgTranslatePoint(float *dx, float *dy, const float *t, float sx, fl
 	*dy = sy + t[5];
 }
 
+NVGUserImplementation *nvgGetUserImplementationFromContext(NVGcontext *ctx)
+{
+	return ctx->userImplementation;
+}
+
 void nvgLog(NVGcontext *ctx, NVGLogLevel level, const char *msg)
 {
 	nvgUserImplLog(ctx->userImplementation, level, msg);
 }
 
-void nvgLogFmt(NVGcontext *ctx, NVGLogLevel level, const char *fmt, ...)
+void nvgLogF(NVGcontext *ctx, NVGLogLevel level, const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
 
-	nvgUserImplLogFmt(ctx->userImplementation, level, fmt, args);
+	nvgUserImplLogF(ctx->userImplementation, level, fmt, args);
 
 	va_end(args);
 }
 
-void nvgUserImplLogFmt(NVGUserImplementation *userImplementation, NVGLogLevel level, const char *fmt, va_list aa)
+void nvgUserImplLogF(NVGUserImplementation *userImplementation, NVGLogLevel level, const char *fmt, va_list args)
 {
-	size_t len = vsnprintf(NULL, 0, fmt, aa);
+	size_t len = vsnprintf(NULL, 0, fmt, args);
 
 	if (len < 0 || len == INT_MAX)
 	{
@@ -273,7 +278,7 @@ void nvgUserImplLogFmt(NVGUserImplementation *userImplementation, NVGLogLevel le
 	{
 		size_t npLen = len + 1;
 		char *buf = malloc(npLen);
-		size_t bufLen = vsnprintf(buf, npLen, fmt, aa);
+		size_t bufLen = vsnprintf(buf, npLen, fmt, args);
 
 		if (npLen != bufLen)
 		{
@@ -3249,7 +3254,7 @@ static int nvg__createFont(NVGcontext *ctx, const char *name, const char *filena
 		// if the font handles differ, our assumptions fails, so we just
 		// use gray for everything
 		nvg__deleteFontContext(ctx, 1);
-		nvgLogFmt(ctx, NVG_LOG_LEVEL_WARNING, "Font \"%s\" (%s) forced degradation to non-ClearType", name ? name : "???", filename ? filename : "");
+		nvgLogF(ctx, NVG_LOG_LEVEL_WARNING, "Font \"%s\" (%s) forced degradation to non-ClearType", name ? name : "???", filename ? filename : "");
 	}
 	return (handle[0]);
 }

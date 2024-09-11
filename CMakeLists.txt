@@ -3,6 +3,9 @@
 cmake_minimum_required(VERSION 3.11)
 project(nanovg C)
 
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED TRUE)
+
 set(THIRDPARTY_HEADERS thirdparty/stb_image.h thirdparty/stb_truetype.h)
 
 set(NANOVG_SOURCES src/nanovg.c ${THIRDPARTY_SOURCES})
@@ -11,8 +14,6 @@ set(NANOVG_HEADERS src/nanovg.h src/nanovg_gl.h src/nanovg_gl_utils.h src/fontst
 add_library(nanovg STATIC ${NANOVG_SOURCES} ${NANOVG_HEADERS})
 set_target_properties(nanovg PROPERTIES PUBLIC_HEADER "${NANOVG_HEADERS}")
 target_include_directories(nanovg PRIVATE thirdparty)
-
-set_property(TARGET nanovg PROPERTY C_STANDARD 11)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 	target_compile_definitions(nanovg PRIVATE DEBUG)
@@ -23,7 +24,6 @@ endif ()
 add_executable(playground playground/main.c playground/glad.c)
 target_include_directories(playground PRIVATE playground src thirdparty)
 target_link_libraries(playground PRIVATE nanovg)
-
 
 #[[
 install(TARGETS nanovg
