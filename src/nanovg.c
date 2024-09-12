@@ -246,7 +246,7 @@ static void nvgTranslatePoint(float *dx, float *dy, const float *t, float sx, fl
 	*dy = sy + t[5];
 }
 
-NVGUserImplementation *nvgGetUserImplementationFromContext(NVGcontext *ctx)
+NVGUserImplementation *nvgGetUserImplFromCtx(NVGcontext *ctx)
 {
 	return ctx->userImplementation;
 }

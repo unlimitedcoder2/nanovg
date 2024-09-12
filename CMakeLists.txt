@@ -8,7 +8,7 @@ set(CMAKE_C_STANDARD_REQUIRED TRUE)
 
 set(THIRDPARTY_HEADERS thirdparty/stb_image.h thirdparty/stb_truetype.h)
 
-set(NANOVG_SOURCES src/nanovg.c ${THIRDPARTY_SOURCES})
+set(NANOVG_SOURCES src/nanovg.c)
 set(NANOVG_HEADERS src/nanovg.h src/nanovg_gl.h src/nanovg_gl_utils.h src/fontstash.h)
 
 add_library(nanovg STATIC ${NANOVG_SOURCES} ${NANOVG_HEADERS})

@@ -50,7 +50,7 @@ typedef struct NVGUserImplementation NVGUserImplementation;
 
 typedef struct NVGcontext NVGcontext;
 
-// NVGUserImplementation *nvgGetUserImplementationFromContext(NVGcontext *ctx);
+NVGUserImplementation *nvgGetUserImplFromCtx(NVGcontext *ctx);
 
 //
 // Logging
@@ -72,8 +72,8 @@ struct NVGcolor {
 		float rgba[4];
 		struct {
 			float r, g, b, a;
-		};
 	};
+		};
 };
 typedef struct NVGcolor NVGcolor;
 
